@@ -38,8 +38,9 @@ function pickClass(selectedId: string | null | undefined): string {
 }
 
 function startPlanning(state: DungeonPartyState, now: number, encounterIndex: number): DungeonPartyState {
+  const moralePenalty = Math.max(0, 3 - state.partyMorale) * 2;
   const encounters = state.encounters.map((encounter, index) => index === encounterIndex
-    ? { ...encounter, cleared: false, health: encounter.maxHealth, partyPower: undefined, resolution: undefined }
+    ? { ...encounter, cleared: false, difficulty: encounter.maxHealth + moralePenalty, health: encounter.maxHealth, partyPower: undefined, resolution: undefined }
     : encounter);
   return { ...state, stage: "planning", encounterIndex, encounters, actionsByPlayer: {}, deadlineAt: now + planningMs, revealAt: null, lastRolls: undefined, updatedAt: now };
 }
@@ -66,12 +67,13 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     const choice = state.actionsByPlayer[hero.playerId] ?? { action: "fight" as const };
     const roll = rollD6();
     const hand = handsByPlayerId[hero.playerId] ?? [];
-    const playedCard = choice.action === "play_card" ? hand.find((card) => card.id === choice.cardId) : undefined;
+    const cardIndex = choice.action === "play_card" ? hand.findIndex((card) => card.id === choice.cardId) : -1;
+    const playedCard = cardIndex >= 0 ? hand[cardIndex] : undefined;
     const contribution = playerPower(hero.classId, choice.action, roll, hero.items.reduce((sum, item) => sum + item.attack, 0) + (playedCard?.attack ?? 0));
     partyPower += contribution;
     rolls.push({ playerId: hero.playerId, roll, contribution });
     if (playedCard) {
-      handsByPlayerId[hero.playerId] = hand.filter((card) => card.id !== playedCard.id);
+      handsByPlayerId[hero.playerId] = hand.filter((_card, index) => index !== cardIndex);
       if (playedCard.effect === "intrigue") {
         const target = heroes.find((candidate) => candidate.playerId === choice.targetPlayerId);
         if (target && target.playerId !== hero.playerId) {
@@ -122,7 +124,8 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
   for (const hero of heroes) {
     const action = state.actionsByPlayer[hero.playerId]?.action;
     if (success && action === "loot") {
-      const card = cardCatalog[(seed + heroes.indexOf(hero) + state.encounterIndex) % cardCatalog.length]!;
+      const cardTemplate = cardCatalog[(seed + heroes.indexOf(hero) + state.encounterIndex) % cardCatalog.length]!;
+      const card = { ...cardTemplate, id: `${cardTemplate.id}-${hero.playerId}-${state.encounterIndex}-${seed}` };
       if (card.kind === "equipment") {
         if (!hero.items.some((item) => item.id === card.id)) hero.items.push({ id: card.id, name: card.name, description: card.description, attack: card.attack });
       } else {
@@ -145,7 +148,7 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     if (top) { top.fame += 1; top.lastFameDelta = (top.lastFameDelta ?? 0) + 1; top.lastOutcome = `${top.lastOutcome ? `${top.lastOutcome} ` : ""}Du erhältst den Ruhm für den entscheidenden Beitrag.`; }
   }
   const encounter = nextEncounters[state.encounterIndex]!;
-  const partyMorale = Math.max(0, state.partyMorale + (success ? 1 : -1));
+  const partyMorale = Math.max(0, Math.min(5, state.partyMorale + (success ? 1 : -1)));
   const finalEncounter = state.encounterIndex === state.encounters.length - 1;
   const campaignWon = finalEncounter && success;
   const rankedHeroes = [...heroes].sort((a, b) => b.fame - a.fame || b.gold - a.gold || b.health - a.health);

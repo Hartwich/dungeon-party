@@ -2,7 +2,7 @@
 
 Kompetitives Koop-Fantasyspiel: gemeinsam durch den Dungeon, persönlich um Ruhm und Beute.
 
-**Status: frühe Vertikalscheibe.** Das Paket enthält sechs Encounter, sechs Klassen, geheime simultane Aktionen, erste Gegenstandskarten, eine gemeinsame Moral und eine individuelle Ruhmwertung. Inhaltstiefe, Laufzeit und Balance sind noch Prototypniveau.
+**Status: frühe Vertikalscheibe.** Das Paket enthält acht Encounter, zwei geheime Gruppenabstimmungen über alternative Dungeonwege, einen dreiphasigen Bosskampf mit begrenzten Wiederholungsversuchen, sechs Klassen, geheime Grundaktionen mit anschließendem zehnsekündigem Kartenfenster, sechs Effektfamilien, erste Ausrüstung, gemeinsame Moral und individuelle Ruhmwertung. Sabotagekarten belohnen einen trotzdem gewonnenen Kampf und kosten bei einer Niederlage 2 Ruhm. Inhaltstiefe, Laufzeit und Balance sind noch Prototypniveau.
 
 ## Spielen über Open Party Lab
 
@@ -23,4 +23,4 @@ npm run typecheck
 npm run build
 ```
 
-Die vollständige Spiel- und Umsetzungsplanung liegt in [`docs/game-design.md`](docs/game-design.md). Das Spiel wird als öffentliches Repository geführt.
+Die vollständige Spiel- und Umsetzungsplanung liegt in [`docs/game-design.md`](docs/game-design.md). Das Spiel ist im öffentlichen Repository [Hartwich/dungeon-party](https://github.com/Hartwich/dungeon-party) verfügbar.

@@ -2,10 +2,6 @@ import { createBaseRoundState, roundPhaseDurations, transitionRoundState, type S
 import { dungeonPartyManifest } from "../manifest.js";
 import type { DungeonActionId, DungeonCard, DungeonEncounter, DungeonPartyControllerState, DungeonPartyInput, DungeonPartyPublicState, DungeonPartyState } from "../protocol.js";
 
-const planningMs = 25_000;
-const routeVoteMs = 15_000;
-const responseMs = 10_000;
-const revealMs = 6_000;
 const maxHealth = 8;
 const bossPhaseNames = ["Der Vertrag", "Das Drachenfeuer", "Die letzte Klausel"];
 const bossPhaseCount = bossPhaseNames.length;
@@ -69,8 +65,8 @@ function startPlanning(state: DungeonPartyState, now: number, encounterIndex: nu
     const playerCount = state.heroes.length;
     return {
       ...state, stage: "voting", encounterIndex, actionsByPlayer: {}, routeVotesByPlayer: {},
-      responsesByPlayerId: {}, routeOptions: routeOptions(playerCount, encounterIndex), deadlineAt: null, responseDeadlineAt: null,
-      voteDeadlineAt: now + routeVoteMs, revealAt: null, lastRolls: undefined, updatedAt: now,
+      responsesByPlayerId: {}, continueByPlayerId: {}, routeOptions: routeOptions(playerCount, encounterIndex),
+      lastRolls: undefined, lastResolution: undefined, updatedAt: now,
       message: "Wählt gemeinsam den nächsten Weg."
     };
   }
@@ -91,7 +87,7 @@ function startPlanning(state: DungeonPartyState, now: number, encounterIndex: nu
       partyPower: undefined, resolution: undefined
     }
     : encounter);
-  return { ...state, stage: "planning", encounterIndex, encounters, actionsByPlayer: {}, responsesByPlayerId: {}, routeVotesByPlayer: {}, routeOptions: undefined, voteDeadlineAt: null, responseDeadlineAt: null, deadlineAt: now + planningMs, revealAt: null, lastRolls: undefined, updatedAt: now };
+  return { ...state, stage: "planning", encounterIndex, encounters, actionsByPlayer: {}, responsesByPlayerId: {}, routeVotesByPlayer: {}, continueByPlayerId: {}, routeOptions: undefined, lastRolls: undefined, lastResolution: undefined, updatedAt: now };
 }
 
 function resolveRouteVote(state: DungeonPartyState, now: number): DungeonPartyState {
@@ -99,19 +95,17 @@ function resolveRouteVote(state: DungeonPartyState, now: number): DungeonPartySt
   if (options.length === 0) return state;
   const counts = options.map((option) => ({ option, votes: Object.values(state.routeVotesByPlayer).filter((routeId) => routeId === option.id).length }));
   const selected = [...counts].sort((a, b) => b.votes - a.votes || a.option.difficulty - b.option.difficulty || a.option.id.localeCompare(b.option.id))[0]!.option;
+  const routeHistory = [...state.routeHistory, { encounterIndex: state.encounterIndex, routeId: selected.id, name: selected.name }];
   const encounters = state.encounters.map((encounter, index) => index === state.encounterIndex
     ? { ...selected, flavor: selected.description }
     : encounter);
-  const next = startPlanning({ ...state, encounters, message: `Der Weg ist gewählt: ${selected.name}.` }, now, state.encounterIndex, true);
+  const next = startPlanning({ ...state, encounters, routeHistory, message: `Der Weg ist gewählt: ${selected.name}.` }, now, state.encounterIndex, true);
   return { ...next, message: `Der Weg ist gewählt: ${selected.name}.${counts[0]!.votes === counts[1]!.votes ? " Gleichstand: Die leichtere Route gewinnt." : ""}` };
 }
 
 function openResponseWindow(state: DungeonPartyState, now: number): DungeonPartyState {
-  const actionsByPlayer = { ...state.actionsByPlayer };
-  for (const hero of state.heroes) if (!actionsByPlayer[hero.playerId]) actionsByPlayer[hero.playerId] = { action: "fight" };
   return {
-    ...state, stage: "response", actionsByPlayer, responsesByPlayerId: {}, deadlineAt: null,
-    responseDeadlineAt: now + responseMs, revealAt: null, updatedAt: now,
+    ...state, stage: "response", responsesByPlayerId: {}, updatedAt: now,
     message: "Grundaktionen aufgedeckt. Reaktionskarten können gespielt werden."
   };
 }
@@ -136,6 +130,7 @@ function playerPower(heroClass: string, action: DungeonActionId, roll: number, i
 function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartyState {
   let seed = (state.seed >>> 0) || 17;
   const rollD6 = () => { seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0; return 1 + (seed % 6); };
+  const beforeByPlayer = new Map(state.heroes.map((hero) => [hero.playerId, { health: hero.health, fame: hero.fame, gold: hero.gold }]));
   const heroes: DungeonPartyState["heroes"] = state.heroes.map((hero) => ({ ...hero, lastAction: state.actionsByPlayer[hero.playerId]?.action, lastFameDelta: 0, lastOutcome: undefined }));
   const handsByPlayerId = Object.fromEntries(Object.entries(state.handsByPlayerId).map(([playerId, hand]) => [playerId, [...hand]]));
   const current = state.encounters[state.encounterIndex];
@@ -316,11 +311,31 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     ? heroes.map((hero) => ({ ...hero, fame: hero.fame + (winnerIds.includes(hero.playerId) ? 3 : 1) }))
     : bossRunFailed ? heroes.map((hero) => ({ ...hero, fame: hero.fame + 1 })) : heroes;
   const finalWinner = [...finalHeroes].sort((a, b) => b.fame - a.fame || b.gold - a.gold || b.health - a.health)[0];
+  const resolution = {
+    id: `${state.encounterIndex}-${state.bossPhaseIndex}-${state.bossPhaseAttempts}-${seed}`,
+    encounterId: current.id, encounterName: current.name, success, partyPower, targetDifficulty,
+    difficultyModifier,
+    heroes: finalHeroes.map((hero) => {
+      const before = beforeByPlayer.get(hero.playerId)!;
+      const roll = rolls.find((entry) => entry.playerId === hero.playerId)!;
+      return {
+        playerId: hero.playerId, name: hero.name,
+        action: state.actionsByPlayer[hero.playerId]?.action ?? "fight",
+        roll: roll.roll, contribution: roll.contribution,
+        healthDelta: hero.health - before.health, fameDelta: hero.fame - before.fame, goldDelta: hero.gold - before.gold,
+        outcome: hero.lastOutcome
+      };
+    }),
+    cards: playedCards.map(({ hero, card, targetPlayerId }) => ({
+      playerId: hero.playerId, playerName: hero.name, cardId: card.id, name: card.name, effect: card.effect,
+      ...(targetPlayerId ? { targetPlayerId, targetName: heroes.find((entry) => entry.playerId === targetPlayerId)?.name } : {})
+    }))
+  };
   const next: DungeonPartyState = {
     ...state, stage: campaignEnded ? "complete" : "reveal", heroes: finalHeroes, handsByPlayerId, encounters: nextEncounters,
-    actionsByPlayer: {}, deadlineAt: null, responseDeadlineAt: null, revealAt: campaignEnded ? null : now + revealMs, partyMorale, seed,
+    actionsByPlayer: {}, continueByPlayerId: {}, partyMorale, seed,
     bossPhaseIndex: nextBossPhaseIndex, bossPhaseAttempts: nextBossPhaseAttempts,
-    lastRolls: rolls, campaignWon: bossPhaseComplete,
+    lastRolls: rolls, lastResolution: resolution, campaignWon: bossPhaseComplete,
     winnerPlayerId: campaignEnded ? finalWinner?.playerId : undefined,
     winnerPlayerIds: campaignEnded && finalWinner ? finalHeroes.filter((hero) => hero.fame === finalWinner.fame && hero.gold === finalWinner.gold && hero.health === finalWinner.health).map((hero) => hero.playerId) : undefined,
     updatedAt: now,
@@ -337,7 +352,7 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
       stage: "planning", encounterIndex: 0, encounters: createEncounters(context.players.length),
       heroes: context.players.map((player) => ({ playerId: player.id, name: player.name, classId: pickClass(player.selectedCharacterId), health: maxHealth, fame: 0, gold: 0, items: [] })),
       handsByPlayerId: Object.fromEntries(context.players.map((player) => [player.id, [{ ...intrigueCard }]])),
-      actionsByPlayer: {}, responsesByPlayerId: {}, routeVotesByPlayer: {}, deadlineAt: null, responseDeadlineAt: null, voteDeadlineAt: null, revealAt: null, partyMorale: 3,
+      actionsByPlayer: {}, responsesByPlayerId: {}, routeVotesByPlayer: {}, continueByPlayerId: {}, routeHistory: [], partyMorale: 3,
       bossPhaseIndex: 0, bossPhaseAttempts: 0,
       seed: (context.now + context.players.length * 997) >>> 0
     };
@@ -366,19 +381,23 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
       }
       return { ...state, responsesByPlayerId: { ...state.responsesByPlayerId, [input.playerId]: {} }, updatedAt: context.now };
     }
+    if (input.type === "dungeon_continue") {
+      if (state.stage !== "reveal" || state.continueByPlayerId[input.playerId]) return state;
+      return { ...state, continueByPlayerId: { ...state.continueByPlayerId, [input.playerId]: true }, updatedAt: context.now };
+    }
     if (state.stage !== "planning" || input.type !== "dungeon_action" || state.actionsByPlayer[input.playerId] ||
       !["fight", "loot", "aid"].includes(input.action)) return state;
     return { ...state, actionsByPlayer: { ...state.actionsByPlayer, [input.playerId]: { action: input.action } }, updatedAt: context.now };
   },
   tick(state, _deltaMs, context) {
-    if (state.stage === "voting" && (Object.keys(state.routeVotesByPlayer).length >= state.heroes.length || (state.voteDeadlineAt !== null && context.now >= state.voteDeadlineAt))) {
+    if (state.stage === "voting" && Object.keys(state.routeVotesByPlayer).length >= state.heroes.length) {
       return resolveRouteVote(state, context.now);
     }
-    if (state.stage === "planning" && state.phase === "playing" && (Object.keys(state.actionsByPlayer).length >= state.heroes.length || (state.deadlineAt !== null && context.now >= state.deadlineAt))) {
+    if (state.stage === "planning" && state.phase === "playing" && Object.keys(state.actionsByPlayer).length >= state.heroes.length) {
       return openResponseWindow(state, context.now);
     }
-    if (state.stage === "response" && (Object.keys(state.responsesByPlayerId).length >= state.heroes.length || (state.responseDeadlineAt !== null && context.now >= state.responseDeadlineAt))) return resolveEncounter(state, context.now);
-    if (state.stage === "reveal" && state.revealAt !== null && context.now >= state.revealAt) {
+    if (state.stage === "response" && Object.keys(state.responsesByPlayerId).length >= state.heroes.length) return resolveEncounter(state, context.now);
+    if (state.stage === "reveal" && Object.keys(state.continueByPlayerId).length >= state.heroes.length) {
       const current = state.encounters[state.encounterIndex];
       const nextIndex = current?.id === "boss" && !current.cleared ? state.encounterIndex : state.encounterIndex + 1;
       return startPlanning(state, context.now, nextIndex);
@@ -392,16 +411,23 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
   },
   toPublicState(state) {
     const { actionsByPlayer: _actions, responsesByPlayerId: _responses, handsByPlayerId: _hands, routeVotesByPlayer: _votes, seed: _seed, ...publicState } = state;
-    const revealed = state.stage === "response" || state.stage === "reveal" || state.stage === "complete"
+    const revealed = state.stage === "response"
       ? Object.fromEntries(Object.entries(state.actionsByPlayer).map(([playerId, action]) => [playerId, action.action]))
+      : state.stage === "reveal" || state.stage === "complete"
+        ? Object.fromEntries((state.lastResolution?.heroes ?? []).map((entry) => [entry.playerId, entry.action]))
       : {};
     return { ...publicState, heroes: state.heroes.map((hero) => ({ ...hero, handCount: (state.handsByPlayerId[hero.playerId] ?? []).length })), submittedCount: Object.keys(state.actionsByPlayer).length, responseCount: Object.keys(state.responsesByPlayerId).length, routeVoteCount: Object.keys(state.routeVotesByPlayer).length, revealedActionsByPlayer: revealed };
   },
   toControllerStateForPlayer(state, _context, playerId) {
     const { actionsByPlayer: _actions, responsesByPlayerId: _responses, handsByPlayerId: _hands, routeVotesByPlayer: _votes, seed: _seed, ...publicState } = state;
-    const revealed = state.stage === "response" || state.stage === "reveal" || state.stage === "complete"
+    const revealed = state.stage === "response"
       ? Object.fromEntries(Object.entries(state.actionsByPlayer).map(([id, action]) => [id, action.action]))
+      : state.stage === "reveal" || state.stage === "complete"
+        ? Object.fromEntries((state.lastResolution?.heroes ?? []).map((entry) => [entry.playerId, entry.action]))
       : {};
-    return { ...publicState, heroes: state.heroes.map((hero) => ({ ...hero, handCount: (state.handsByPlayerId[hero.playerId] ?? []).length })), ownHand: state.handsByPlayerId[playerId] ?? [], submittedCount: Object.keys(state.actionsByPlayer).length, responseCount: Object.keys(state.responsesByPlayerId).length, routeVoteCount: Object.keys(state.routeVotesByPlayer).length, revealedActionsByPlayer: revealed, ownActionSubmitted: Boolean(state.actionsByPlayer[playerId]), ownResponseSubmitted: Boolean(state.responsesByPlayerId[playerId]), ownVoteSubmitted: Boolean(state.routeVotesByPlayer[playerId]), availableTargets: state.heroes.filter((hero) => hero.playerId !== playerId).map(({ playerId: id, name }) => ({ playerId: id, name })) } satisfies DungeonPartyControllerState;
+    const ownResponse = state.responsesByPlayerId[playerId];
+    const ownResponseCard = ownResponse?.cardId ? state.handsByPlayerId[playerId]?.find((card) => card.id === ownResponse.cardId) : undefined;
+    const privateHand = state.handsByPlayerId[playerId] ?? [];
+    return { ...publicState, heroes: state.heroes.map((hero) => ({ ...hero, handCount: (state.handsByPlayerId[hero.playerId] ?? []).length })), ownHand: ownResponseCard ? privateHand.filter((card) => card.id !== ownResponseCard.id) : privateHand, ownResponseCard, ownResponseTargetName: state.heroes.find((hero) => hero.playerId === ownResponse?.targetPlayerId)?.name, submittedCount: Object.keys(state.actionsByPlayer).length, responseCount: Object.keys(state.responsesByPlayerId).length, routeVoteCount: Object.keys(state.routeVotesByPlayer).length, revealedActionsByPlayer: revealed, ownActionSubmitted: Boolean(state.actionsByPlayer[playerId]), ownResponseSubmitted: Boolean(state.responsesByPlayerId[playerId]), ownVoteSubmitted: Boolean(state.routeVotesByPlayer[playerId]), ownContinueSubmitted: Boolean(state.continueByPlayerId[playerId]), availableTargets: state.heroes.filter((hero) => hero.playerId !== playerId).map(({ playerId: id, name }) => ({ playerId: id, name })) } satisfies DungeonPartyControllerState;
   }
 };

@@ -15,6 +15,8 @@ export type DungeonPartyInput = (PlayerInput & {
   type: "dungeon_card_response";
   cardId?: string;
   targetPlayerId?: string;
+}) | (PlayerInput & {
+  type: "dungeon_continue";
 });
 
 export interface DungeonRouteOption {
@@ -40,6 +42,40 @@ export interface DungeonHero {
   lastAction?: DungeonActionId;
   lastOutcome?: string;
   lastFameDelta?: number;
+}
+
+export interface DungeonResolutionPlayer {
+  playerId: string;
+  name: string;
+  action: DungeonActionId;
+  roll: number;
+  contribution: number;
+  healthDelta: number;
+  fameDelta: number;
+  goldDelta: number;
+  outcome?: string;
+}
+
+export interface DungeonResolutionCard {
+  playerId: string;
+  playerName: string;
+  cardId: string;
+  name: string;
+  effect?: DungeonCardEffect;
+  targetPlayerId?: string;
+  targetName?: string;
+}
+
+export interface DungeonResolution {
+  id: string;
+  encounterId: string;
+  encounterName: string;
+  success: boolean;
+  partyPower: number;
+  targetDifficulty: number;
+  difficultyModifier: number;
+  heroes: DungeonResolutionPlayer[];
+  cards: DungeonResolutionCard[];
 }
 
 export interface DungeonItem {
@@ -82,12 +118,10 @@ export interface DungeonPartyState extends BaseRoundState {
   actionsByPlayer: Record<string, { action: DungeonActionId; cardId?: string; targetPlayerId?: string }>;
   responsesByPlayerId: Record<string, { cardId?: string; targetPlayerId?: string }>;
   routeVotesByPlayer: Record<string, string>;
+  continueByPlayerId: Record<string, true>;
+  routeHistory: Array<{ encounterIndex: number; routeId: string; name: string }>;
   routeOptions?: DungeonRouteOption[];
   handsByPlayerId: Record<string, DungeonCard[]>;
-  deadlineAt: number | null;
-  responseDeadlineAt: number | null;
-  voteDeadlineAt: number | null;
-  revealAt: number | null;
   partyMorale: number;
   bossPhaseIndex: number;
   bossPhaseAttempts: number;
@@ -95,6 +129,7 @@ export interface DungeonPartyState extends BaseRoundState {
   winnerPlayerId?: string;
   winnerPlayerIds?: string[];
   campaignWon?: boolean;
+  lastResolution?: DungeonResolution;
   lastRolls?: Array<{ playerId: string; roll: number; contribution: number }>;
 }
 
@@ -109,6 +144,9 @@ export interface DungeonPartyControllerState extends DungeonPartyPublicState {
   ownActionSubmitted: boolean;
   ownResponseSubmitted: boolean;
   ownVoteSubmitted: boolean;
+  ownContinueSubmitted: boolean;
+  ownResponseCard?: DungeonCard;
+  ownResponseTargetName?: string;
   availableTargets: Array<{ playerId: string; name: string }>;
   ownHand: DungeonCard[];
 }

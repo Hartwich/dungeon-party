@@ -2,7 +2,7 @@
 
 Kompetitives Koop-Fantasyspiel: gemeinsam durch den Dungeon, persönlich um Ruhm und Beute.
 
-**Status: frühe Vertikalscheibe.** Das Paket enthält acht Encounter, zwei geheime Gruppenabstimmungen über alternative Dungeonwege, einen dreiphasigen Bosskampf mit begrenzten Wiederholungsversuchen, sechs Klassen, geheime Grundaktionen mit anschließendem zehnsekündigem Kartenfenster, sechs Effektfamilien, erste Ausrüstung, gemeinsame Moral und individuelle Ruhmwertung. Sabotagekarten belohnen einen trotzdem gewonnenen Kampf und kosten bei einer Niederlage 2 Ruhm. Inhaltstiefe, Laufzeit und Balance sind noch Prototypniveau.
+**Status: spielbare Alpha in Überarbeitung.** Acht Räume, zwei geheime Wegabstimmungen, ein dreiphasiger Boss, sechs Klassen und ein kompetitives Ruhmziel bilden die Kampagne. Abstimmungen, Grundaktionen, Kartenreaktionen und das Lesen der Auflösung haben kein Zeitlimit. Der Host zeigt eigene Raum- und Monsterillustrationen, Würfelwürfe und konkrete Folgen pro Held; auf dem Handy liegt die eigene Hand als auswählbare Kartenfächer vor. Inhaltstiefe, Laufzeit, Balance und Mehrtelefon-Runden bleiben noch zu prüfen.
 
 ## Spielen über Open Party Lab
 

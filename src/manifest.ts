@@ -8,7 +8,7 @@ export const dungeonPartyManifest = {
   maxPlayers: 8,
   hostView: "DungeonPartyHost",
   controllerView: "dungeon-party",
-  controllerLayout: "choice",
+  controllerLayout: "dungeon_party",
   supportsTeams: false,
   estimatedRoundDurationMs: 240_000,
   scoreScope: "game",

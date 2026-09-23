@@ -16,17 +16,17 @@ Jede Begegnung stellt die Gruppe vor eine gemeinsame Probe. Vor der Auflösung w
 
 - Ziel: 3–8 Spieler, keine Spielleitung, niemand scheidet vorzeitig aus.
 - Ziel-Laufzeit nach Ausbau: 30–50 Minuten.
-- Erste technische Vertikalscheibe: acht Räume inklusive Boss, zwei geheime Wegabstimmungen und eine geheime Aktion je Raum, kurze Planungsfenster. Sie dient dazu, Geheimwahl, gleichzeitige Auflösung, Koop-/Wettbewerbswertung und private Controller-Aktionen durchzuspielen; sie ist noch kein Laufzeitziel.
+- Technische Vertikalscheibe: acht Räume inklusive Boss, zwei geheime Wegabstimmungen und eine geheime Aktion je Raum. Keine Auswahlphase hat ein Zeitlimit. Die Gruppe bestätigt selbst, wenn sie nach dem Ergebnis weiterlesen und weitergehen möchte. Die 30–50 Minuten bleiben ein Ziel, keine bereits geprüfte Laufzeit.
 
 ## Vollständiger geplanter Spielablauf
 
 1. **Lobby und Klassenwahl** – Jede Person wählt eine Klasse. Klassen dürfen doppelt vorkommen, damit die Gruppengröße nicht an sechs einzigartigen Rollen hängt.
 2. **Dungeon-Start** – Host zeigt Dungeonkarte, Gruppe, Raumziel und gemeinsame Moral. Private Ziele und Informationen gehen nur an die jeweilige Person.
 3. **Wegwahl** – An zwei Gabelungen stimmt die Gruppe geheim zwischen zwei verbundenen Wegen ab. Die Mehrheit entscheidet, bei Gleichstand der leichtere Weg. Die aktuelle Vertikalscheibe zeigt Zielwert und Folgen beider Wege, verwendet aber noch keine privaten Klassenhinweise.
-4. **Planung** – 30–45 Sekunden zum Diskutieren. Spieler dürfen Angebote machen, aber die Plattform behandelt Zusagen nicht als verbindlich.
-5. **Geheime Grundaktion** – Jede Person wählt eine Aktion am Handy. Eingaben bleiben für andere verborgen. Wer bis zum Timer nichts wählt, greift automatisch an.
-6. **Reaktionskarten** – Nach dem Aufdecken der Grundaktionen öffnet sich ein zehnsekündiges Fenster. Jede Person spielt geheim höchstens eine Effektkarte aus der Hand oder passt. Der Host zeigt nur, wie viele Reaktionen eingegangen sind.
-7. **Auflösung** – Der Server würfelt, wendet Schutz, Unterstützung, Sabotage und Beute in festgelegter Reihenfolge an und veröffentlicht danach das Ergebnis samt Würfen und Karteneffekten.
+4. **Geheime Grundaktion** – Jede Person wählt ohne Timer eine Aktion am Handy. Eingaben bleiben für andere verborgen; die Phase endet erst, wenn alle gewählt haben.
+5. **Aktionskarten** – Die Grundaktionen werden gleichzeitig aufgedeckt. Jede Person kann in Ruhe höchstens eine Effektkarte aus ihrer sichtbaren Hand wählen, ein Ziel bestimmen und sie ausspielen oder ausdrücklich passen. Auch diese Phase hat kein Zeitlimit.
+6. **Auflösung** – Der Server würfelt, wendet Schutz, Unterstützung, Sabotage und Beute in festgelegter Reihenfolge an. Der gemeinsame Bildschirm zeigt gewürfelte Augen, Beiträge, Zielwert, Erfolg oder Niederlage, gespielte Karten und Ziele sowie Leben-, Ruhm- und Goldänderungen pro Person.
+7. **Ergebnis lesen** – Die Ergebnisansicht bleibt stehen. Jede Person bestätigt auf dem Handy, wenn sie bereit ist; der nächste Raum beginnt erst nach der Bestätigung aller.
 8. **Beute und Ruhm** – Erfolg bringt Gruppenfortschritt. Individuelle Aktionen vergeben Ruhm, Gold und gegebenenfalls Gegenstandskarten. Niederlagen kosten Leben/Moral und können zusätzliche Konsequenzen auslösen.
 9. **Boss und Ergebnis** – Der Drache hat drei Phasen: Vertrag, Drachenfeuer und letzte Klausel. Nach jeder Phase plant die Gruppe erneut. Jede Phase darf einmal wiederholt werden. Scheitert die Gruppe ein zweites Mal an derselben Phase, endet der Lauf mit kleinerer Endauszahlung und persönlichem Rang. Für den Gruppensieg müssen alle drei Phasen gelingen; Ruhm bestimmt weiterhin den Einzelsieg.
 
@@ -46,7 +46,7 @@ Vorgesehen sind sechs Klassen mit einer passiven Eigenschaft und einer aktiven F
 
 ### Proben und Auflösungsordnung
 
-Jede Grundaktion wird einmal pro Begegnung angenommen. Nach Ablauf oder vollständiger Abgabe werden fehlende Aktionen zu „Kämpfen“. Danach zeigt der Host die Grundaktionen, aber keine Karten oder Ziele. Antworten enden, wenn alle reagiert haben oder zehn Sekunden verstrichen sind; wer nicht reagiert, passt automatisch. Der Server wendet Reaktionen in fester Reihenfolge an: Schutz, Intrigen, Kampfstärke-Modifikationen, Zielwert-Modifikationen, Gruppenerfolg, Schaden, Beute und Ruhm. Wurf, Zielwert und Modifikatoren werden am Host dargestellt.
+Jede Grundaktion wird einmal pro Begegnung angenommen; fehlende Eingaben werden nicht automatisch ersetzt. Nach vollständiger Abgabe sehen alle die Grundaktionen. Reaktionen bleiben privat, bis alle eine Karte gewählt oder gepasst haben. Der Server wendet Reaktionen in fester Reihenfolge an: Schutz, Intrigen, Kampfstärke-Modifikationen, Zielwert-Modifikationen, Gruppenerfolg, Schaden, Beute und Ruhm. Der Ergebnisdatensatz hält für jede Person Aktion, Wurf, Beitrag und Änderungen an Leben, Ruhm und Gold fest. Nach dem Ergebnis wartet die Gruppe auf die ausdrückliche Bestätigung aller.
 
 ### Sieg und Wertung
 
@@ -63,7 +63,7 @@ Jede Grundaktion wird einmal pro Begegnung angenommen. Nach Ablauf oder vollstä
 - acht Begegnungen inklusive zweier geheimer Wegabstimmungen: Troll, Brücke, eine Route aus Händler/Gruft, Schatzgewölbe, eine Route aus Schrein/Waffenkammer, Skelett-Orchester, Schatzkammer, Drache als Boss;
 - Routenfolgen: Händler gibt bei Erfolg allen 1 Gold; Gruft belohnt den stärksten Beitrag mit 2 Ruhm; Schrein heilt bei Erfolg alle um 1 Leben; Waffenkammer gibt erfolgreichen Beutezügen eine Zusatzkarte;
 - Bosskampf in drei Phasen (Vertrag, Drachenfeuer, letzte Klausel) mit jeweils höchstens zwei Versuchen; nach einem Fehlschlag spielt die Gruppe dieselbe Phase erneut, nach dem zweiten Fehlschlag endet der Lauf;
-- drei simultane Grundaktionen: Kampf, Hilfe, Beute; danach ein zehnsekündiges, geheimes Reaktionsfenster mit höchstens einer Effektkarte oder Passen pro Person. Jeder startet mit einer verbrauchbaren Intrigenkarte. Erfolgreiche Beuteaktionen ziehen weitere Ausrüstungs- oder Effektkarten. Nur die eigene Hand ist am Handy sichtbar;
+- drei simultane Grundaktionen: Kampf, Hilfe, Beute; danach eine geheime Reaktionsphase ohne Zeitlimit mit höchstens einer Effektkarte oder Passen pro Person. Ergebnisanzeige ohne automatischen Wechsel: alle bestätigen selbst. Jeder startet mit einer verbrauchbaren Intrigenkarte. Erfolgreiche Beuteaktionen ziehen weitere Ausrüstungs- oder Effektkarten. Nur die eigene Hand ist am Handy sichtbar;
 - Effektfamilien: Intrige (Ruhm stehlen und Gruppenkraft senken), falsche Rechnung (Gold stehlen), Heldengesang (Gruppenkraft erhöhen), Schutz (Schaden abfangen), lose Diele (einen Beitrag schwächen) und Verstärkung (Zielwert erhöhen). Sabotagekarten bringen bei bestandenem Kampf ihren angegebenen Ruhm-Bonus; bei Niederlage kosten sie 2 Ruhm;
 - sechs Klassen; mehrere Spieler dürfen dieselbe Klasse spielen;
 - kleines Deck mit humorvollen Ausrüstungsgegenständen;
@@ -88,22 +88,22 @@ Content bleibt datengetrieben und deklarativ. Inhalte referenzieren stabile IDs 
 - Ausrüstung hat zunächst nur wenige, gut lesbare Werte; Effekte können keine beliebigen Zustandsoperationen ausführen.
 - Intrigenkarten sind nach der Auflösung sichtbar und haben einen messbaren Gruppenpreis. Kein Ziel darf früh ausscheiden.
 - Leben bei null bedeutet zunächst angeschlagen statt ausgeschieden: reduzierte Aktion oder Gruppenstrafe, mit Heilungsmöglichkeit.
-- Zeitüberschreitung führt zu einem gültigen Standardzug. Verbindungsabbruch blockiert weder Abstimmung noch Auflösung.
+- Es gibt keinen automatischen Zug bei Zeitüberschreitung. Eine getrennte, bewusste Host-Funktion zum Überspringen inaktiver oder getrennter Personen bleibt als spätere Ausfallsicherung offen; sie darf nicht als Timer verkleidet sein.
 - Geheime Inhalte sind im Serverzustand vorhanden, aber aus öffentlicher Host-Serialisierung ausgeschlossen; Controller erhalten nur den eigenen Handlungsstatus.
 
 ## Technische Architektur
 
 - Separates optionales Spielpaket unter `local-games/dungeon-party`.
 - Server autorisiert Inputs, würfelt und löst alle Wirkungen auf.
-- Host zeigt Begegnung, öffentliche Würfe, Gruppe, Ruhm und Fortschritt.
-- Controller zeigt die geheime Wahl, private Ziele/Infos und die eigene Figur.
+- Host zeigt den gewählten Weg, eigene Raum-/Monsterillustrationen, Gruppenaktionen, animierte Würfel und die Folgen pro Person.
+- Controller zeigt Grundaktionen als gut unterscheidbare Optionen und Effektkarten als auswählbare, illustrierte Kartenhand mit separater Zielwahl.
 - Kampagne läuft innerhalb eines ServerGame-Laufs; am Ende folgen Plattform-Ergebnis und persönliche Rangliste.
 - Inhalte werden als typisierte Daten von der Engine getrennt. Registry-Integration erfolgt über die bekannte lokale Spieleliste und deren generierte Exporte.
 - Für Veröffentlichung und gehostete Builds wird ein tatsächliches öffentliches Spiel-Repository benötigt; die lokale Entwicklung darf keine erfundene Remote-URL voraussetzen.
 
 ## Umsetzungsreihenfolge
 
-1. Vertikalscheibe: State-Modell, private Aktion, Timer/Timeout, Auflösung, Host/Controller, Spielplan und Ergebnis. Grundablauf und zwei Wegabstimmungen sind umgesetzt.
+1. Vertikalscheibe: endliche Entscheidungen ohne Timer, private Aktion, Kartenhand, vollständiger Ergebnisdatensatz, illustriertes Host-/Controller-Feedback und Gruppenbestätigung. Die Grundlage ist umgesetzt; echte Mehrtelefon-Runden und Balance bleiben zu prüfen.
 2. Regel-Korrektheit und Balance: Spielerzahl 3/4/6/8, Rollenverteilung, Zufall, Gleichstand, K.-o.-Schutz.
 3. Laufzeit verlängern: Drei Bossphasen mit Wiederholungsversuchen sind umgesetzt; mehrere Aktionsrunden bei Elitegegnern und zusätzliche Begegnungspools bleiben offen.
 4. Content-Pool erweitern: Karten, NPCs, Ereignisse, geheime Ziele, lokalisierte Inhalte.

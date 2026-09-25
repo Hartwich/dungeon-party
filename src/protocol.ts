@@ -1,6 +1,6 @@
 import type { BaseRoundState, PlayerInput } from "@open-party-lab/game-core";
 
-export type DungeonActionId = "fight" | "loot" | "aid";
+export type DungeonActionId = "fight" | "loot" | "aid" | "warrior_guard" | "mage_burst" | "rogue_lift" | "cleric_heal" | "bard_inspire" | "tinkerer_improvise";
 export type DungeonCardEffect = "intrigue" | "false_bill" | "rally" | "ward" | "jam" | "reinforce";
 
 export type DungeonPartyInput = (PlayerInput & {
@@ -47,6 +47,7 @@ export interface DungeonHero {
 export interface DungeonResolutionPlayer {
   playerId: string;
   name: string;
+  classId: string;
   action: DungeonActionId;
   roll: number;
   contribution: number;
@@ -61,6 +62,9 @@ export interface DungeonResolutionCard {
   playerName: string;
   cardId: string;
   name: string;
+  description: string;
+  kind?: "equipment" | "effect";
+  source?: "loot" | "boss";
   effect?: DungeonCardEffect;
   targetPlayerId?: string;
   targetName?: string;
@@ -76,6 +80,7 @@ export interface DungeonResolution {
   difficultyModifier: number;
   heroes: DungeonResolutionPlayer[];
   cards: DungeonResolutionCard[];
+  rewards: DungeonResolutionCard[];
 }
 
 export interface DungeonItem {
@@ -145,6 +150,7 @@ export interface DungeonPartyControllerState extends DungeonPartyPublicState {
   ownResponseSubmitted: boolean;
   ownVoteSubmitted: boolean;
   ownContinueSubmitted: boolean;
+  ownHasPlayableResponse: boolean;
   ownResponseCard?: DungeonCard;
   ownResponseTargetName?: string;
   availableTargets: Array<{ playerId: string; name: string }>;

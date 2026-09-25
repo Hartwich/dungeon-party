@@ -1,5 +1,5 @@
 import type { ControllerLayoutKey } from "@open-party-lab/game-core";
-import { dungeonPartyManifest } from "../manifest.js";
+import { classActions, dungeonPartyManifest } from "../manifest.js";
 import type { DungeonActionId, DungeonPartyControllerState } from "../protocol.js";
 
 interface RenderContext {
@@ -12,10 +12,10 @@ interface RenderContext {
   onInput(input: unknown): void;
 }
 
-const actionLabels = {
-  de: { fight: "Kämpfen", aid: "Helfen", loot: "Beute sichern" },
-  en: { fight: "Fight", aid: "Help", loot: "Grab loot" }
-} as const;
+const actionLabels: Record<"de" | "en", Record<DungeonActionId, string>> = {
+  de: { fight: "Kämpfen", aid: "Helfen", loot: "Beute sichern", ...Object.fromEntries(Object.values(classActions).map((value) => [value.id, value.name.de])) } as Record<DungeonActionId, string>,
+  en: { fight: "Fight", aid: "Help", loot: "Grab loot", ...Object.fromEntries(Object.values(classActions).map((value) => [value.id, value.name.en])) } as Record<DungeonActionId, string>
+};
 
 export const controllerGame = {
   id: dungeonPartyManifest.id,
@@ -34,12 +34,13 @@ export const controllerGame = {
     const ownResponseSubmitted = Boolean(game.ownResponseSubmitted);
     const ownVoteSubmitted = Boolean(game.ownVoteSubmitted);
     const ownContinueSubmitted = Boolean(game.ownContinueSubmitted);
+    const ownHasPlayableResponse = Boolean(game.ownHasPlayableResponse);
     const playing = state.game?.phase === "playing";
     const mode = !playing || stage === "complete" ? "complete"
       : stage === "voting" ? (ownVoteSubmitted ? "waiting" : "voting")
         : stage === "planning" ? (ownActionSubmitted ? "waiting" : "planning")
-          : stage === "response" ? (ownResponseSubmitted ? "waiting" : "response")
-            : stage === "reveal" ? "reveal" : "waiting";
+          : stage === "response" ? (ownResponseSubmitted || !ownHasPlayableResponse ? "waiting" : "response")
+            : stage === "reveal" ? (ownContinueSubmitted ? "waiting" : "reveal") : "waiting";
     const encounterLabel = encounter?.id === "boss" && encounter.phaseIndex
       ? `${en ? "Boss phase" : "Bossphase"} ${encounter.phaseIndex}/${encounter.phaseCount ?? 3}`
       : `${en ? "Room" : "Raum"} ${(game.encounterIndex ?? 0) + 1}/${game.encounters?.length ?? 8}`;
@@ -55,19 +56,21 @@ export const controllerGame = {
         onSelect: () => send("dungeon_route_vote", { routeId: route.id })
       }))
       : mode === "planning"
-        ? (["fight", "aid", "loot"] as DungeonActionId[]).map((action) => ({
+        ? (["fight", "aid", "loot", ...(hero && classActions[hero.classId] ? [classActions[hero.classId].id] : [])] as DungeonActionId[]).map((action) => ({
           id: action,
-          label: actionLabels[copy][action],
+          label: actionLabels[copy][action] ?? action,
           description: action === "fight"
             ? (en ? "Roll a d6, add your class bonus and equipment. Gain 1 fame." : "Wirf einen W6 und addiere Klassenbonus und Ausrüstung. Du erhältst 1 Ruhm.")
             : action === "aid"
               ? (en ? "Add steady power; Clerics can heal a wounded hero. Gain 1 fame." : "Bring verlässliche Kraft ein; Kleriker heilen. Du erhältst 1 Ruhm.")
-              : (en ? "Take 2 gold now. On success, gain 2 fame and draw a card; on failure, take extra damage." : "Nimm sofort 2 Gold. Bei Erfolg gibt es 2 Ruhm und eine Karte; bei Misserfolg erleidest du mehr Schaden."),
+              : action === "loot"
+                ? (en ? "Take 2 gold now. On success, gain 2 fame and draw a card; on failure, take extra damage." : "Nimm sofort 2 Gold. Bei Erfolg gibt es 2 Ruhm und eine Karte; bei Misserfolg erleidest du mehr Schaden.")
+                : classActions[hero?.classId ?? ""]?.description[copy] ?? "",
           onSelect: () => send("dungeon_action", { action })
         }))
         : [];
 
-    const actionName = (action: string | undefined) => actionLabels[copy][(action as DungeonActionId) ?? "fight"];
+    const actionName = (action: string | undefined) => actionLabels[copy][(action as DungeonActionId) ?? "fight"] ?? action ?? actionLabels[copy].fight;
     const revealedActions = mode === "response"
       ? (game.heroes ?? []).map((entry) => `${entry.name}: ${actionName(game.revealedActionsByPlayer?.[entry.playerId])}`)
       : [];
@@ -86,13 +89,19 @@ export const controllerGame = {
       targetName: game.ownResponseTargetName
     } : undefined;
     const cardsInResolution = (resolution?.cards ?? []).map((card) =>
-      `${card.playerName} ${en ? "played" : "spielt"} „${card.name}“${card.targetName ? ` → ${card.targetName}` : ""}`
+      `${card.playerName} ${en ? "played" : "spielt"} „${card.name}“${card.targetName ? ` → ${card.targetName}` : ""} · ${card.description}`
     );
+    const rewardCards = resolution?.rewards.map((card) => ({
+      playerName: card.playerName,
+      source: card.source,
+      card: { id: card.cardId, name: card.name, description: card.description, kind: card.kind, effect: card.effect, artKey: card.effect ?? card.kind }
+    })) ?? [];
     const resultCopy = resolution ? {
       success: resolution.success,
       partyPower: resolution.partyPower,
       targetDifficulty: resolution.targetDifficulty,
       cards: cardsInResolution,
+      rewards: rewardCards,
       heroes: resolution.heroes.map((entry) => ({
         name: entry.name,
         action: actionName(entry.action),
@@ -110,8 +119,10 @@ export const controllerGame = {
         ? (en ? "Your secret route vote is in. Waiting for everyone to choose." : "Deine geheime Wegwahl ist abgegeben. Warte, bis alle gewählt haben.")
         : stage === "planning"
           ? (en ? "Your action is sealed. The group advances when everyone has chosen." : "Deine Aktion ist geheim abgegeben. Es geht weiter, wenn alle gewählt haben.")
-          : stage === "response"
-            ? (en ? "Your card response is locked. Waiting for the others." : "Deine Kartenentscheidung ist abgegeben. Warte auf die anderen.")
+        : stage === "response"
+            ? !ownHasPlayableResponse
+              ? (en ? "No playable card. Your response was skipped automatically." : "Keine spielbare Karte. Deine Reaktion wurde automatisch übersprungen.")
+              : (en ? "Your card response is locked. Waiting for the others." : "Deine Kartenentscheidung ist abgegeben. Warte auf die anderen.")
             : (en ? `You are ready. ${Object.keys(game.continueByPlayerId ?? {}).length}/${game.heroes?.length ?? 0} players are ready to continue.` : `Bereit. ${Object.keys(game.continueByPlayerId ?? {}).length}/${game.heroes?.length ?? 0} sind bereit weiterzugehen.`)
       : "";
     const title = mode === "voting" ? (en ? "Choose a route" : "Wählt euren Weg")
@@ -168,7 +179,10 @@ export const controllerGame = {
       targetForbiddenSelfEffects: ["intrigue", "false_bill", "jam"],
       teamFeed: revealedActions,
       resolution: resultCopy,
+      readyPhase: stage === "reveal",
       continueLabel: en ? "Continue when ready" : "Weiter, wenn alle bereit sind",
+      readySubmitted: ownContinueSubmitted,
+      readyLabel: ownContinueSubmitted ? (en ? "Ready ✓" : "Bereit ✓") : (en ? "Ready" : "Bereit"),
       passLabel: en ? "Pass" : "Passen",
       playLabel: en ? "Play card" : "Karte spielen",
       onPlayCard: (cardId: string, targetPlayerId?: string) => send("dungeon_card_response", { cardId, ...(targetPlayerId ? { targetPlayerId } : {}) }),

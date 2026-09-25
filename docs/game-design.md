@@ -24,10 +24,10 @@ Jede Begegnung stellt die Gruppe vor eine gemeinsame Probe. Vor der Auflösung w
 2. **Dungeon-Start** – Host zeigt Dungeonkarte, Gruppe, Raumziel und gemeinsame Moral. Private Ziele und Informationen gehen nur an die jeweilige Person.
 3. **Wegwahl** – An zwei Gabelungen stimmt die Gruppe geheim zwischen zwei verbundenen Wegen ab. Die Mehrheit entscheidet, bei Gleichstand der leichtere Weg. Die aktuelle Vertikalscheibe zeigt Zielwert und Folgen beider Wege, verwendet aber noch keine privaten Klassenhinweise.
 4. **Geheime Grundaktion** – Jede Person wählt ohne Timer eine Aktion am Handy. Eingaben bleiben für andere verborgen; die Phase endet erst, wenn alle gewählt haben.
-5. **Aktionskarten** – Die Grundaktionen werden gleichzeitig aufgedeckt. Jede Person kann in Ruhe höchstens eine Effektkarte aus ihrer sichtbaren Hand wählen, ein Ziel bestimmen und sie ausspielen oder ausdrücklich passen. Auch diese Phase hat kein Zeitlimit.
-6. **Auflösung** – Der Server würfelt, wendet Schutz, Unterstützung, Sabotage und Beute in festgelegter Reihenfolge an. Der gemeinsame Bildschirm zeigt gewürfelte Augen, Beiträge, Zielwert, Erfolg oder Niederlage, gespielte Karten und Ziele sowie Leben-, Ruhm- und Goldänderungen pro Person.
-7. **Ergebnis lesen** – Die Ergebnisansicht bleibt stehen. Jede Person bestätigt auf dem Handy, wenn sie bereit ist; der nächste Raum beginnt erst nach der Bestätigung aller.
-8. **Beute und Ruhm** – Erfolg bringt Gruppenfortschritt. Individuelle Aktionen vergeben Ruhm, Gold und gegebenenfalls Gegenstandskarten. Niederlagen kosten Leben/Moral und können zusätzliche Konsequenzen auslösen.
+5. **Aktionskarten** – Die Grundaktionen werden gleichzeitig aufgedeckt. Wer eine spielbare Effektkarte besitzt, kann in Ruhe eine auswählen, ein Ziel bestimmen und sie spielen oder freiwillig passen. Wer keine legal spielbare Karte hat, wird automatisch bereit gesetzt; es erscheint kein Pass-Knopf. Auch diese Phase hat kein Zeitlimit.
+6. **Kampfsequenz** – Der Host wechselt durch kurze Szenen: erst die Aktion jeder Heldin und jedes Helden, dann jede ausgespielte Karte, danach die einzelnen Würfelwürfe. Ein gezeichneter W6 zeigt seine Augen; Musik wechselt in einen Kampftrack, Karten, Würfe und Ausgang erhalten eigene kurze Klänge. Die Werte bleiben serverseitig bestimmt.
+7. **Ergebnis lesen** – Nach den Szenen bleiben Erfolg, Schaden, Ruhm, Gold und Kartengewinne sichtbar. Jede Person drückt **Bereit**; der Button bleibt farbig markiert, bis alle bereit sind. Erst dann beginnt der nächste Raum.
+8. **Beute und Ruhm** – Erfolg bringt Gruppenfortschritt. Individuelle Aktionen vergeben Ruhm, Gold und gegebenenfalls Gegenstandskarten. Jede erfolgreich überwundene Drachenphase gibt allen eine Effektkarte auf die Hand, auch der finale Boss-Sieg wird im Ergebnisbild gezeigt. Niederlagen kosten Leben/Moral und können zusätzliche Konsequenzen auslösen.
 9. **Boss und Ergebnis** – Der Drache hat drei Phasen: Vertrag, Drachenfeuer und letzte Klausel. Nach jeder Phase plant die Gruppe erneut. Jede Phase darf einmal wiederholt werden. Scheitert die Gruppe ein zweites Mal an derselben Phase, endet der Lauf mit kleinerer Endauszahlung und persönlichem Rang. Für den Gruppensieg müssen alle drei Phasen gelingen; Ruhm bestimmt weiterhin den Einzelsieg.
 
 ## Regelkern
@@ -41,8 +41,13 @@ Vorgesehen sind sechs Klassen mit einer passiven Eigenschaft und einer aktiven F
 - **Kämpfen:** Würfel plus Klasse und Ausrüstung zur Gruppenstärke beitragen; eigene Ruhmpunkte erhalten.
 - **Helfen:** verlässliche Gruppenstärke; bestimmte Klassen heilen oder erhalten Zusatzruhm.
 - **Beute sichern:** weniger Kampfkraft einbringen, Gold erhalten und bei Gruppenerfolg eine Gegenstandskarte ziehen.
+- Zusätzlich zur gemeinsamen Auswahl hat jede Klasse eine eigene Aktion: **Krieger – Abfangen** (reduziert eigenen Fehlschlagsschaden), **Magier – Arkaner Blitz** (+4 Kraft mit Rückschlag bei einer 1), **Schurke – Taschenspiel** (bei Erfolg bis zu 2 Gold von der reichsten Person stehlen), **Kleriker – Heilgebet** (heilt die verletzteste Person vor dem Schaden), **Barde – Kampflied** (+2 Gruppenstärke) und **Tüftler – Feldumbau** (+3 bei einem Wurf von 4–6). Damit stehen jeder Person drei gemeinsame und eine zur Klasse passende Aktion zur Wahl.
 - **Effektkarten:** Nach den Grundaktionen darf jede Person eine Karte aus der eigenen privaten Hand ausspielen. Die Intrige wählt eine Person als Ziel, verschiebt Ruhm und senkt dafür die Gruppenstärke. Wird die Probe trotz Sabotage bestanden, erhält der Saboteur den Kartenbonus; scheitert die Gruppe, verliert er 2 Ruhm. Weitere Karten stehlen Gold, stärken die Gruppe, schützen vor Schaden, schwächen einen Beitrag oder erhöhen den Zielwert und zahlen für riskante Sabotage Ruhm bei Erfolg beziehungsweise −2 Ruhm bei Misserfolg. Karten werden nach dem Ausspielen verbraucht.
 - Später: verhandeln/überreden, ausweichen, zaubern, Gegenstände einsetzen, Flüche und Reaktionen.
+
+### Kartenpool im aktuellen Prototyp
+
+Der Katalog hat **10 unterschiedliche Kartenvorlagen**: **4 Ausrüstungen** (Blechkrone, Holzlöffel, Stiefel, Ring) und **6 Effektkarten** (Intrige, Falsche Rechnung, Heldengesang, Mantel, Lose Diele, Zusätzlicher Papierkram). Alle starten mit der Intrige der Eitelkeit. Bei erfolgreicher Beuteaktion kommt eine Vorlage aus dem Katalog: Ausrüstung wird angelegt, Effektkarten landen auf der Hand. In der Waffenkammer gibt es eine zweite Ziehung. Für jede erfolgreich geschaffte Drachenphase kommt eine zusätzliche Effektkarte pro Person auf die Hand. Der Ziehalgorithmus ist im Moment deterministisch und wird noch ausbalanciert.
 
 ### Proben und Auflösungsordnung
 

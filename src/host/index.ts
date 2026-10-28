@@ -1,6 +1,7 @@
 import { classActions, dungeonPartyManifest } from "../manifest.js";
 import type { DungeonPartyPublicState } from "../protocol.js";
-import { classEmblem, effectSymbol, encounterIllustration } from "./art.js";
+import { classEmblem, effectSymbol, encounterIllustration, campIllustration } from "./art.js";
+import { campActions } from "../content.js";
 import { DungeonAudioRig } from "./audio.js";
 
 interface HostState {
@@ -30,8 +31,8 @@ function cubeSvg(value: number, rolling = false, en = false): string {
   const dots = pipGrid.map(([column, row]) => {
     const u = column / 2;
     const v = row / 2;
-    const x = 21 + 38 * u;
-    const y = 39 + 19 * u + 32 * v;
+    const x = 26 + 24 * u;
+    const y = 47 + 12.6 * u + 20 * v;
     return `<circle cx="${x}" cy="${y}" r="3.1"/>`;
   }).join("");
   return `<svg class="dp-cube ${rolling ? "rolling" : ""}" viewBox="0 0 100 100" role="img" aria-label="${en ? "D6 shows" : "Würfel zeigt"} ${value}"><title>d6: ${value}</title><g class="dp-cube-body"><path class="dp-cube-top" d="M19 36 57 16 82 29 44 50z"/><path class="dp-cube-side" d="M57 16 82 29 82 69 57 89z"/><path class="dp-cube-front" d="M19 36 57 56 57 89 19 69z"/><g class="dp-cube-pips">${dots}</g><path class="dp-cube-edge" d="m19 36 38 20 25-27M57 56v33M19 69l38 20 25-20"/></g></svg>`;
@@ -45,21 +46,28 @@ function render(root: HTMLElement, appState: HostState | null, beat?: StoryBeat,
   const final = state.stage === "complete";
   const done = state.phase === "finished" || state.phase === "scoreboard" || state.phase === "result" || state.phase === "locked";
   const result = state.lastResolution;
+  const modifiers = result && (result.sharedPower !== 0 || result.difficultyModifier !== 0)
+    ? '<p class="dp-party-modifiers">' + (en ? 'CARDS & SCOUTS: ' : 'KARTEN & SPÄHER: ') + (result.sharedPower > 0 ? '+' : '') + result.sharedPower + ' ⚔ · ' + (en ? 'TARGET MODIFIER: ' : 'ZIELWERT-ÄNDERUNG: ') + (result.difficultyModifier > 0 ? '+' : '') + result.difficultyModifier + '</p>' : '';
+  const camp = state.stage === "camp" || state.stage === "camp_reveal";
+  const readyPhase = state.stage === "reveal" || state.stage === "camp_reveal";
   const actionLabel = (action?: string) => ({ fight: en ? "Fight" : "Kampf", aid: en ? "Help" : "Hilfe", loot: en ? "Loot" : "Beute", ...Object.fromEntries(Object.values(classActions).map((entry) => [entry.id, entry.name[en ? "en" : "de"]])) } as Record<string, string>)[action ?? "fight"];
-  const stageLabel = state.stage === "voting" ? (en ? "ROUTE VOTE" : "WEGWAHL")
+  const stageLabel = camp ? (en ? "CAMPFIRE" : "LAGERFEUER") : state.stage === "voting" ? (en ? "ROUTE VOTE" : "WEGWAHL")
     : state.stage === "planning" ? (en ? "SECRET ACTIONS" : "GEHEIME AKTIONEN")
       : state.stage === "response" ? (en ? "PLAY A CARD" : "KARTE SPIELEN")
         : state.stage === "reveal" ? (en ? "ROOM RESULT" : "RAUMERGEBNIS")
           : final ? (en ? "CAMPAIGN END" : "KAMPAGNENENDE") : "DUNGEON";
-  const readyCount = state.stage === "voting" ? state.routeVoteCount ?? 0
+  const readyCount = state.stage === "camp" ? state.campSubmittedCount ?? 0 : state.stage === "voting" ? state.routeVoteCount ?? 0
     : state.stage === "response" ? state.responseCount ?? 0
-      : state.stage === "reveal" ? Object.keys(state.continueByPlayerId ?? {}).length
+      : readyPhase ? Object.keys(state.continueByPlayerId ?? {}).length
         : state.submittedCount ?? 0;
   const nextPaths = (state.routeHistory ?? []).map((route) => '<span class="dp-path-step"><i></i><b>' + esc(route.name) + "</b></span>").join("");
   const routeOptions = (state.routeOptions ?? []).map((route, index) =>
-    '<article class="dp-route-card" style="--route-i:' + index + '"><div class="dp-route-art"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 53 25 36 36 44 54 18M43 18h11v11"/><circle cx="25" cy="36" r="5"/><circle cx="48" cy="25" r="4"/></svg></div><div><span>' +
+    '<article class="dp-route-card" style="--route-i:' + index + '"><div class="dp-route-art">' + encounterIllustration(route.artKey) + '</div><div><span>' +
     esc(route.kind.toUpperCase()) + " · " + (en ? "TARGET" : "ZIELWERT") + " " + route.difficulty + "</span><h3>" + esc(route.name) + "</h3><p>" + esc(route.description) + "</p></div></article>"
   ).join("");
+  const campPanel = camp ? '<section class="dp-camp"><div class="dp-camp-landscape">' + campIllustration() + '<div class="dp-camp-title"><small>' + (en ? "A BREATH BEFORE THE NEXT ROOM" : "DURCHATMEN VOR DEM NÄCHSTEN RAUM") + '</small><h2>' + (en ? "Around the campfire" : "Rund ums Lagerfeuer") + '</h2><p>' + (state.stage === "camp" ? (en ? "Heal, restock, upgrade or scout. Choose on your phone." : "Heilen, Karten kaufen, aufrüsten oder spähen. Wählt am Handy.") : (en ? "Your preparations are complete. Continue when everyone is ready." : "Die Vorbereitungen sind abgeschlossen. Weiter, sobald alle bereit sind.")) + '</p></div></div>' +
+    (state.stage === "camp" ? '<div class="dp-camp-options">' + Object.values(campActions).map((action) => '<article><i>' + action.symbol + '</i><b>' + esc(action.name[en ? "en" : "de"]) + '</b><span>' + esc(action.description[en ? "en" : "de"]) + '</span></article>').join("") + '</div>' :
+      '<div class="dp-camp-results">' + (state.campResults ?? []).map((entry) => '<article><i>' + campActions[entry.action].symbol + '</i><div><b>' + esc(entry.playerName) + '</b><span>' + esc(campActions[entry.action].name[en ? "en" : "de"]) + '</span><small>' + entry.cards.map((card) => esc(card.name)).join(" · ") + '</small></div><strong>' + delta(entry.healthDelta, "♥") + delta(entry.goldDelta, "¤") + delta(entry.powerDelta, "⚔") + '</strong></article>').join("") + '</div>') + '</section>' : "";
   const responseActions = state.stage === "response" ?
     '<section class="dp-action-strip"><div class="dp-section-label"><span>' + (en ? "SEALED ACTIONS REVEALED" : "AKTIONEN AUFGEDECKT") + '</span><b>' + (state.submittedCount ?? heroes.length) + "/" + heroes.length + '</b></div><div class="dp-action-chips">' +
     heroes.map((hero) => '<span class="dp-action-chip"><i class="action-' + (state.revealedActionsByPlayer?.[hero.playerId] ?? "fight") + '"></i><b>' + esc(hero.name) + "</b><em>" + actionLabel(state.revealedActionsByPlayer?.[hero.playerId]) + "</em></span>").join("") +
@@ -81,14 +89,14 @@ function render(root: HTMLElement, appState: HostState | null, beat?: StoryBeat,
     const current = beat.scene === "cards" ? focusCard?.playerName : focusHero?.name;
     const stepLabel = (en ? "SCENE " : "SZENE ") + `${Math.min(beat.index + 1, Math.max(1, steps))} / ${Math.max(1, steps)}`;
     if (beat.scene === "actions" && focusHero) {
-      const special = classActions[focusHero.classId];
+      const special = classActions[focusHero.classId]?.id === focusHero.action ? classActions[focusHero.classId] : undefined;
       return '<section class="dp-story-scene action-scene" data-scene="action"><div class="dp-story-eyebrow">' + stepLabel + ' · ' + (en ? "HERO ACTION" : "HELDENAKTION") + '</div><div class="dp-story-hero"><span class="dp-story-portrait">' + classEmblem(focusHero.classId) + '</span><div><small>' + esc(focusHero.classId.toUpperCase()) + '</small><h2>' + esc(focusHero.name) + '</h2><b>' + esc(actionLabel(focusHero.action)) + '</b><p>' + esc(special?.description[en ? "en" : "de"] ?? (focusHero.action === "fight" ? (en ? "Roll, add your class power and equipment." : "Würfelwurf plus Klassenkraft und Ausrüstung.") : focusHero.action === "aid" ? (en ? "Add support to the party total." : "Du bringst Unterstützung in die Gruppenprobe.") : (en ? "Trade power for personal treasure." : "Du tauschst Kampfkraft gegen persönliche Beute."))) + '</p></div></div><div class="dp-story-progress">' + result.heroes.map((_hero, index) => '<i class="' + (index <= beat.index ? "on" : "") + '"></i>').join("") + '</div></section>';
     }
     if (beat.scene === "cards" && focusCard) {
       return '<section class="dp-story-scene card-scene"><div class="dp-story-eyebrow">' + stepLabel + ' · ' + (en ? "CARD ON THE TABLE" : "KARTE AUF DEM TISCH") + '</div><article class="dp-story-card"><span class="dp-story-card-art">' + effectSymbol(focusCard.effect) + '</span><div><small>' + esc(focusCard.playerName) + (en ? " plays" : " spielt") + '</small><h2>' + esc(focusCard.name) + '</h2><p>' + esc(focusCard.description) + '</p><p>' + (focusCard.targetName ? (en ? "Target: " : "Ziel: ") + esc(focusCard.targetName) : (en ? "Affects the whole party." : "Wirkt auf die ganze Gruppe.")) + '</p></div></article><div class="dp-story-progress">' + result.cards.map((_card, index) => '<i class="' + (index <= beat.index ? "on" : "") + '"></i>').join("") + '</div></section>';
     }
     if (beat.scene === "rolls" && focusHero) {
-      return '<section class="dp-story-scene roll-scene"><div class="dp-story-eyebrow">' + stepLabel + ' · ' + (en ? "D6 ROLL" : "W6-WURF") + '</div><div class="dp-story-roll"><div class="dp-big-cube-wrap">' + cubeSvg(focusHero.roll, true, en) + '</div><div class="dp-story-roll-copy"><small>' + esc(actionLabel(focusHero.action)) + '</small><h2>' + esc(focusHero.name) + '</h2><b>' + (en ? "POWER ADDED" : "KRAFTBEITRAG") + ' <i>+' + focusHero.contribution + '</i></b></div></div><div class="dp-story-progress">' + result.heroes.map((_hero, index) => '<i class="' + (index <= beat.index ? "on" : "") + '"></i>').join("") + '</div></section>';
+      return '<section class="dp-story-scene roll-scene"><div class="dp-story-eyebrow">' + stepLabel + ' · ' + (en ? "D6 ROLL" : "W6-WURF") + '</div><div class="dp-story-roll"><div class="dp-big-cube-wrap">' + cubeSvg(focusHero.roll, true, en) + '</div><div class="dp-story-roll-copy"><small>' + esc(actionLabel(focusHero.action)) + '</small><h2>' + esc(focusHero.name) + '</h2>' + (focusHero.originalRoll ? '<p class="dp-luck-roll">⚄ ' + focusHero.originalRoll + ' → ' + focusHero.roll + ' · ' + (en ? "LUCK CARD" : "GLÜCKSKARTE") + '</p>' : '') + '<b>' + (en ? "POWER ADDED" : "KRAFTBEITRAG") + ' <i>+' + focusHero.contribution + '</i></b></div></div><div class="dp-story-progress">' + result.heroes.map((_hero, index) => '<i class="' + (index <= beat.index ? "on" : "") + '"></i>').join("") + '</div></section>';
     }
     if (beat.scene === "verdict") {
       return '<section class="dp-story-scene verdict-scene ' + (result.success ? "success" : "failure") + '"><div class="dp-story-verdict-icon">' + (result.success ? "✦" : "⚡") + '</div><div class="dp-story-eyebrow">' + (en ? "THE DUNGEON ANSWERS" : "DER DUNGEON ANTWORTET") + '</div><h2>' + (result.success ? (en ? "THE PARTY BREAKS THROUGH" : "DIE GRUPPE BRICHT DURCH") : (en ? "THE DUNGEON STRIKES" : "DER DUNGEON SCHLÄGT ZURÜCK")) + '</h2><div class="dp-story-total"><span>' + result.partyPower + '</span><i>/</i><b>' + result.targetDifficulty + '</b></div><div class="dp-story-meter"><i style="width:' + Math.min(100, result.partyPower / Math.max(1, result.targetDifficulty) * 100) + '%"></i></div></section>';
@@ -97,14 +105,14 @@ function render(root: HTMLElement, appState: HostState | null, beat?: StoryBeat,
   })() : "";
   const resultPanel = result && (!beat || beat.scene === "settled") ?
     '<section class="dp-result ' + (result.success ? "success" : "failure") + '">' +
-    '<div class="dp-result-heading"><div class="dp-verdict-mark">' + (result.success ? "✓" : "×") + '</div><div><small>' + (en ? "ROOM CHECK" : "RAUMPROBE") + '</small><h2>' +
+    '<div class="dp-result-heading"><div class="dp-verdict-mark">' + (result.success ? "✓" : "×") + '</div><div><small>' + (en ? "ROOM CHECK · " : "RAUMPROBE · ") + esc(result.encounterName) + '</small><h2>' +
     (result.success ? (en ? "The party prevails" : "Die Gruppe schafft es") : (en ? "The dungeon strikes back" : "Der Dungeon schlägt zurück")) +
     '</h2></div><div class="dp-total"><span>' + (en ? "POWER / TARGET" : "KRAFT / ZIEL") + '</span><b>' + result.partyPower + '<i>/</i>' + result.targetDifficulty + "</b></div></div>" +
     '<div class="dp-dice-grid">' + result.heroes.map((entry, index) =>
       '<article class="dp-roll-card" style="--roll-i:' + index + '"><div class="dp-roll-person"><span class="dp-die">' + cubeSvg(entry.roll, false, en) + '</span><div><b>' + esc(entry.name) + '</b><small>' + actionLabel(entry.action) +
       '</small></div></div><strong class="dp-contribution">+' + entry.contribution + '</strong><div class="dp-roll-changes">' + delta(entry.healthDelta, "♥") + delta(entry.fameDelta, "✦") + delta(entry.goldDelta, "¤") + "</div>" +
       (entry.outcome && !en ? "<p>" + esc(entry.outcome) + "</p>" : "") + "</article>").join("") + "</div>" + responseCards + rewardCards + "</section>" : "";
-  const pending = !result && state.stage !== "voting" && !final ?
+  const pending = !result && state.stage !== "voting" && !final && !camp ?
     '<section class="dp-pending"><div class="dp-pending-icon">' + (state.stage === "response" ? "▱" : "⚄") + '</div><div><b>' +
     (state.stage === "response" ? (en ? "Cards in hand" : "Karten in der Hand") : (en ? "Choose your move" : "Wählt eure Aktion")) +
     '</b><span>' + (state.stage === "response" ? (en ? "The group reacts at its own pace." : "Die Gruppe spielt Karten ohne Zeitdruck.") : (en ? "Choices stay open until everyone submits." : "Die Wahl bleibt offen, bis alle entschieden haben.")) +
@@ -130,27 +138,52 @@ function render(root: HTMLElement, appState: HostState | null, beat?: StoryBeat,
   const sceneText = state.stage === "planning" ? encounter?.flavor
     : state.stage === "response" ? (en ? "Actions are in. The party can still help, meddle, or protect." : "Die Aktionen stehen. Jetzt kann die Gruppe helfen, intrigieren oder schützen.")
       : encounter?.resolution ?? encounter?.flavor;
-  const revealProgress = Math.max(0, 100 - ((encounter?.health ?? 0) / Math.max(1, encounter?.maxHealth ?? 1)) * 100);
+  const revealProgress = encounter?.id === "boss" ? ((state.bossPhaseIndex ?? 0) / 3 * 100)
+    : result ? Math.min(100, result.partyPower / Math.max(1, result.targetDifficulty) * 100) : 0;
   const routeStatus = state.stage === "voting" ? (en ? "VOTE" : "ABSTIMMUNG")
     : state.stage === "response" ? (en ? "REACTIONS" : "REAKTIONEN")
-      : state.stage === "reveal" ? (en ? "CONTINUE WHEN READY" : "WEITER WENN BEREIT")
+      : readyPhase ? (en ? "CONTINUE WHEN READY" : "WEITER WENN BEREIT")
+        : camp ? (en ? "PREPARE ON YOUR PHONE" : "AM HANDY VORBEREITEN")
         : (en ? "NO TURN TIMER" : "OHNE ZUG-ZEITLIMIT");
 
-  root.innerHTML = '<main class="dp-shell">' +
+  root.innerHTML = '<main class="dp-shell ' + (camp ? 'dp-camp-shell ' : '') + (heroes.length > 4 ? 'dp-large-party' : '') + '">' +
     '<header class="dp-header"><div class="dp-brand"><span class="dp-brand-mark">⌘</span><div><small>' + (en ? "A COMPETITIVE CO-OP DUNGEON" : "EIN KOMPETITIVER KOOP-DUNGEON") + '</small><h1>DUNGEON <i>PARTY</i></h1></div></div><button type="button" class="dp-sound-button" data-dp-sound aria-pressed="' + soundEnabled + '">' + (soundEnabled ? (en ? "♫ SFX ON" : "♫ SFX AN") : (en ? "♫ SFX OFF" : "♫ SFX AUS")) + '</button><div class="dp-path"><span class="dp-path-label">' + (en ? "ROUTE" : "WEG") + '</span>' +
     (state.encounters ?? []).map((room, index) => '<i class="' + (index < (state.encounterIndex ?? 0) ? room.cleared ? "cleared" : "failed" : index === state.encounterIndex ? "current" : "") + '" title="' + esc(room.name) + '"></i>').join("") +
     "</div></header>" +
     (nextPaths ? '<nav class="dp-history"><b>' + (en ? "PATH TAKEN" : "GEWÄHLTER PFAD") + '</b><div>' + nextPaths + "</div></nav>" : "") +
     finalPanel +
-    ((!final && !done || cinematic) && state.stage !== "voting" ? '<section class="dp-scene ' + (beat && beat.scene !== "settled" ? "story-" + beat.scene : "") + '"><div class="dp-illustration">' + encounterIllustration(encounter?.id, encounter?.phaseIndex) + '<span class="dp-scene-index">' + String((state.encounterIndex ?? 0) + 1).padStart(2, "0") +
+    ((!final && !done || cinematic) && state.stage !== "voting" && !camp ? '<section class="dp-scene ' + (beat && beat.scene !== "settled" ? "story-" + beat.scene : "") + '"><div class="dp-illustration">' + encounterIllustration(encounter?.artKey ?? encounter?.id, encounter?.phaseIndex) + '<span class="dp-scene-index">' + String((state.encounterIndex ?? 0) + 1).padStart(2, "0") +
       '</span></div><div class="dp-scene-info"><div class="dp-scene-kicker"><span>' + stageLabel + '</span><b>' + (encounter?.id === "boss" ? (en ? "PHASE " : "PHASE ") + (encounter.phaseIndex ?? 1) + "/" + (encounter.phaseCount ?? 3) : (en ? "ROOM " : "RAUM ") + ((state.encounterIndex ?? 0) + 1)) +
       '</b></div><h2>' + esc(bossName ?? encounter?.name ?? "Dungeon Party") + '</h2><p>' + esc(sceneText ?? "") + '</p><div class="dp-progress-track"><i style="width:' + revealProgress + '%"></i></div><div class="dp-scene-metrics"><span>' +
       (state.stage === "planning" ? (en ? "POWER TARGET" : "KRAFTZIEL") : (en ? "PARTY POWER / TARGET" : "GRUPPENKRAFT / ZIEL")) + '</span><b>' + (result ? result.partyPower + " / " + result.targetDifficulty : (encounter?.partyPower ?? "—") + " / " + (encounter?.difficulty ?? 0)) + "</b></div></div></section>" : "") +
-    routeVoting + responseActions + (storyScene || resultPanel) + pending +
+    (!camp && encounter?.rule ? '<aside class="dp-room-rule"><i>' + encounter.rule.symbol + '</i><div><b>' + esc(encounter.rule.name) + '</b><span>' + esc(encounter.rule.description) + '</span></div></aside>' : '') +
+    ((state.preparedPower ?? 0) > 0 ? '<div class="dp-scout-bonus">⌖ +' + state.preparedPower + ' ' + (en ? 'PARTY POWER FROM SCOUTS' : 'GRUPPENKRAFT DURCH SPÄHER') + '</div>' : '') +
+    campPanel + routeVoting + responseActions + (storyScene || resultPanel) + (!beat || ["verdict", "impact", "settled"].includes(beat.scene) ? modifiers : '') + pending +
     ((!final && !done || cinematic) ? '<section class="dp-party"><div class="dp-section-label"><span>' + (en ? "THE PARTY" : "DIE GRUPPE") + '</span><b>' + (state.partyMorale ?? 3) + " " + (en ? "MORALE" : "MORAL") + '</b></div><div class="dp-hero-grid">' + heroRows + "</div></section>" : "") +
-    '<footer class="dp-footer"><span>' + routeStatus + '</span><span>' + readyCount + "/" + heroes.length + " " + (state.stage === "voting" ? (en ? "votes" : "Stimmen") : state.stage === "response" ? (en ? "responses" : "Reaktionen") : state.stage === "reveal" ? (en ? "ready" : "bereit") : (en ? "locked" : "entschieden")) +
+    '<footer class="dp-footer"><span>' + routeStatus + '</span><span>' + readyCount + "/" + heroes.length + " " + (state.stage === "voting" ? (en ? "votes" : "Stimmen") : state.stage === "response" ? (en ? "responses" : "Reaktionen") : readyPhase ? (en ? "ready" : "bereit") : (en ? "locked" : "entschieden")) +
     '</span><span>' + (en ? "CO-OP PROGRESS · INDIVIDUAL FAME" : "KOOP-FORTSCHRITT · PERSÖNLICHER RUHM") + "</span></footer></main>";
 }
+
+const expansionStyles = `
+.dp-camp-shell{background:radial-gradient(ellipse at 50% 22%,#61432955,transparent 65%),#171d1a}
+.dp-party-modifiers{margin:0;color:#d9c390;font-size:11px;letter-spacing:.06em}
+.dp-camp{overflow:hidden;border:1px solid #796143;border-radius:18px;background:#22251e;animation:rise .5s ease-out}
+.dp-camp-landscape{position:relative;min-height:300px;overflow:hidden}.dp-camp-art{display:block;width:100%;height:300px;object-fit:cover}
+.dp-camp-title{position:absolute;inset:24px 24px auto;text-align:center;text-shadow:0 2px 12px #000}.dp-camp-title small{font-size:9px;letter-spacing:.2em;color:#e7bd77}.dp-camp-title h2{font:clamp(28px,4vw,46px)/1.1 Georgia,serif;margin:9px 0}.dp-camp-title p{font-size:12px;margin:0;color:#d7c9ab}
+.dp-camp-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#715b3844}.dp-camp-options article{display:grid;gap:7px;align-content:start;padding:20px;background:#26291f}.dp-camp-options i{font:30px Georgia,serif;color:#edc989;font-style:normal}.dp-camp-options b{font:18px Georgia,serif}.dp-camp-options span{font-size:12px;line-height:1.4;color:#c5b99e}
+.dp-camp-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:9px;padding:18px}.dp-camp-results article{display:flex;gap:12px;align-items:center;padding:10px;border-bottom:1px solid #665a3d}.dp-camp-results i{font:28px Georgia,serif;color:#e3ba75;font-style:normal}.dp-camp-results article>div{display:grid;gap:4px;flex:1}.dp-camp-results span{font-size:11px;color:#d3c1a3}.dp-camp-results small{font-size:10px;color:#a9b398}.dp-camp-results strong{display:flex;gap:4px;flex-wrap:wrap}
+.dp-room-rule{display:flex;align-items:center;gap:16px;padding:10px 0;border-block:1px solid #94724155}.dp-room-rule>i{font:32px Georgia,serif;font-style:normal;color:#d6b173}.dp-room-rule>div{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 20px}.dp-room-rule b{font:18px Georgia,serif;color:#eed3a2}.dp-room-rule span{font-size:12px;color:#c0b195}.dp-scout-bonus{font-size:11px;letter-spacing:.1em;color:#b5cd95}
+.dp-route-card{grid-template-columns:130px minmax(0,1fr);padding:0;overflow:hidden}.dp-route-card>div:last-child{padding:12px 14px 12px 0}.dp-route-art{height:100%;min-height:140px;background:transparent;border-radius:0;overflow:hidden}.dp-route-art svg{width:190px;height:100%;min-height:140px;stroke:none;fill:initial;flex:none}
+.dp-flames{transform-origin:400px 246px;animation:dp-fire 1.6s ease-in-out infinite alternate}.dp-embers{animation:dp-sparks 2.4s ease-out infinite}.dp-luck-roll{font-size:14px!important;color:#c6d9a4!important}.dp-story-roll .dp-cube.rolling .dp-cube-body{animation-name:dp-cube-settle}
+@keyframes dp-fire{from{transform:scaleX(.92) scaleY(.95);opacity:.85}to{transform:scaleX(1.06) scaleY(1.08);opacity:1}}
+@keyframes dp-sparks{from{transform:translateY(18px);opacity:0}35%{opacity:.9}to{transform:translateY(-32px);opacity:0}}
+@keyframes dp-cube-settle{0%{transform:translateY(-35px) rotate(-28deg) scale(.75)}45%{transform:translateY(6px) rotate(340deg) scale(1.08)}75%{transform:translateY(-6px) rotate(690deg)}100%{transform:translateY(0) rotate(720deg) scale(1)}}
+@media(max-width:760px){.dp-camp-options{grid-template-columns:repeat(2,minmax(0,1fr))}.dp-camp-options article{padding:14px}.dp-camp-title{inset:20px 14px auto}.dp-camp-title p{max-width:40ch;margin:auto}.dp-route-card{grid-template-columns:110px minmax(0,1fr)}.dp-room-rule>div{gap:4px}.dp-room-rule span{font-size:11px}}
+@media(min-width:761px){.dp-shell:has(.dp-result) .dp-scene{min-height:110px;grid-template-columns:150px minmax(0,1fr)}.dp-shell:has(.dp-result) .dp-illustration{min-height:110px}.dp-shell:has(.dp-result) .dp-scene-info{padding:14px 22px}.dp-shell:has(.dp-result) .dp-scene-info h2{font-size:28px;max-width:none;margin:6px 0 0}.dp-shell:has(.dp-result) .dp-scene-info>p,.dp-shell:has(.dp-result) .dp-progress-track,.dp-shell:has(.dp-result) .dp-scene-metrics{display:none}.dp-shell:has(.dp-result) .dp-scene-index{font-size:22px;left:10px;bottom:8px}}
+@media(min-width:761px) and (max-height:820px){.dp-shell{padding:18px 24px;gap:10px}.dp-shell:has(.dp-result) .dp-history{display:none}.dp-shell:has(.dp-result) .dp-room-rule{padding:5px 0;gap:10px}.dp-shell:has(.dp-result) .dp-room-rule>i{font-size:22px}.dp-shell:has(.dp-result) .dp-room-rule b{font-size:14px}.dp-shell:has(.dp-result) .dp-result{padding:10px 12px;gap:7px}.dp-shell:has(.dp-result) .dp-die{width:34px;height:34px}.dp-shell:has(.dp-result) .dp-roll-card{padding:6px 8px;gap:4px 8px}.dp-shell:has(.dp-result) .dp-roll-card p{display:none}.dp-shell:has(.dp-result) .dp-roll-person{gap:6px}.dp-shell:has(.dp-result) .dp-hero-row{padding:7px 10px}.dp-shell:has(.dp-result) .dp-card-reveal-item em,.dp-shell:has(.dp-result) .dp-reward-card em{display:none}.dp-shell:has(.dp-result) .dp-card-reveal-item{padding:6px 9px}.dp-shell:has(.dp-result) .dp-card-glyph{width:24px;height:28px;font-size:18px}.dp-shell:has(.dp-result) .dp-reward-card{padding:5px 7px}.dp-shell:has(.dp-result) .dp-party{gap:7px}.dp-shell:has(.dp-result) .dp-footer{padding-top:7px}.dp-camp-landscape,.dp-camp-art{min-height:230px;height:230px}.dp-camp-options article{padding:14px}}
+@media(prefers-reduced-motion:reduce){.dp-flames,.dp-embers{animation:none}.dp-shell *{animation-delay:0ms!important}}
+@media(min-width:761px) and (max-height:820px){.dp-large-party:has(.dp-result){padding-block:12px;gap:8px}.dp-large-party:has(.dp-result) .dp-scene{display:none}.dp-large-party:has(.dp-result) .dp-hero-row{padding:5px 10px}.dp-large-party:has(.dp-result) .dp-hero-grid{gap:6px}.dp-shell:has(.dp-story-scene)>.dp-party{display:none}}
+`;
 
 const styles = [
   ".dp-shell{box-sizing:border-box;min-height:100%;padding:clamp(20px,3vw,48px);display:grid;grid-template-rows:auto auto auto 1fr auto;gap:clamp(14px,2.1vh,24px);background:radial-gradient(ellipse at 52% -18%,#604329 0%,transparent 48%),#171613;color:#f5ecd9;font-family:Inter,ui-sans-serif,system-ui,sans-serif}",
@@ -180,7 +213,7 @@ export const hostGame = {
   mountDom(rootValue: unknown, client: HostSource) {
     const root = rootValue as HTMLElement;
     const style = document.createElement("style");
-    style.textContent = styles;
+    style.textContent = styles + expansionStyles;
     document.head.append(style);
     let lastResolutionId: string | undefined;
     let latestState: HostState | null = null;

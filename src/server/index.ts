@@ -1,59 +1,47 @@
 import { createBaseRoundState, roundPhaseDurations, transitionRoundState, type ScoreEntry, type ServerGame } from "@open-party-lab/game-core";
 import { classActions, dungeonPartyManifest } from "../manifest.js";
-import type { DungeonActionId, DungeonCard, DungeonEncounter, DungeonPartyControllerState, DungeonPartyInput, DungeonPartyPublicState, DungeonPartyState } from "../protocol.js";
+import { campActions, cardCatalog, localizedRoom, roomPools, roomRules, routePools } from "../content.js";
+import type { DungeonActionId, DungeonCard, DungeonEncounter, DungeonPartyControllerState, DungeonPartyInput, DungeonPartyPublicState, DungeonPartyState, DungeonCampResult } from "../protocol.js";
 
 const maxHealth = 8;
 const bossPhaseNames = ["Der Vertrag", "Das Drachenfeuer", "Die letzte Klausel"];
 const bossPhaseCount = bossPhaseNames.length;
 const bossPhaseAttemptLimit = 2;
 const classNames: Record<string, string> = { warrior: "Krieger", mage: "Magier", rogue: "Schurke", cleric: "Kleriker", bard: "Barde", tinkerer: "Tüftler" };
-const intrigueCard: DungeonCard = { id: "petty-intrigue", name: "Intrige der Eitelkeit", description: "Eine Person verliert 1 Ruhm, du erhältst ihn. Eure Stärke sinkt um 2. Scheitert die Probe, verlierst du zusätzlich 2 Ruhm.", attack: 0, kind: "effect", effect: "intrigue", sabotagePenalty: 2 };
-const cardCatalog: DungeonCard[] = [
-  { id: "tin-crown", name: "Blechkrone des Feldmarschalls", description: "+1 Kampfkraft. Sieht von hinten heldischer aus.", attack: 1, kind: "equipment" },
-  { id: "soup-spoon", name: "Verdächtig großer Holzlöffel", description: "+2 gegen Suppenwesen. Sonst zählt er als +1.", attack: 1, kind: "equipment" },
-  { id: "boots", name: "Stiefel des taktischen Rückzugs", description: "+1 Kampfkraft und erstaunlich leise beim Weglaufen.", attack: 1, kind: "equipment" },
-  { id: "ring", name: "Ring der fast völligen Unsichtbarkeit", description: "+1 Kampfkraft. Die Gruppe übersieht dich trotzdem.", attack: 1, kind: "equipment" },
-  intrigueCard,
-  { id: "fake-bill", name: "Falsche Rechnung", description: "Stiehl einer Person bis zu 2 Gold.", attack: 0, kind: "effect", effect: "false_bill" },
-  { id: "rallying-song", name: "Heldengesang mit falschen Tönen", description: "+4 Gruppenstärke bei dieser Probe.", attack: 0, kind: "effect", effect: "rally" },
-  { id: "padded-coat", name: "Mantel aus geliehenen Vorhängen", description: "Schütze eine Person: Bei einem Fehlschlag erleidet sie 1 Schaden weniger.", attack: 0, kind: "effect", effect: "ward" },
-  { id: "loose-floorboard", name: "Lose Diele", description: "Eine Person verliert 3 Kampfstärke. Schafft ihr es trotzdem, erhältst du 1 Ruhm; scheitert ihr, verlierst du 2 Ruhm.", attack: 0, kind: "effect", effect: "jam", sabotagePenalty: 2, sabotageReward: 1 },
-  { id: "extra-paperwork", name: "Zusätzlicher Papierkram für den Drachen", description: "Der Zielwert steigt um 5. Schafft ihr es trotzdem, erhältst du 2 Ruhm; scheitert ihr, verlierst du 2 Ruhm.", attack: 0, kind: "effect", effect: "reinforce", sabotagePenalty: 2, sabotageReward: 2 }
-];
-
-function createEncounters(playerCount: number): DungeonEncounter[] {
-  const scale = Math.max(0, playerCount - 3) * 2;
-  const rows = [
-    ["toll-troll", "Der Troll mit den Nebenkosten", "battle", "Er verlangt Wegzoll, rückwirkend und in bar.", 13],
-    ["bridge", "Die Brücke mit Höhenangst", "challenge", "Die Planken knarren, die Brücke ebenfalls.", 15],
-    ["first-route", "Die erste Weggabelung", "event", "Zwei Wege führen tiefer in den Dungeon.", 0],
-    ["vault", "Das Gewölbe der schlechten Ideen", "challenge", "Eine Truhe, drei Schlösser und ein sehr verdächtiger Hebel.", 18],
-    ["second-route", "Die zweite Weggabelung", "event", "Die Gruppe entscheidet, was sie dem Dungeon zumutet.", 0],
-    ["skeletons", "Das Skelett-Orchester", "battle", "Sie spielen nur Trauermärsche und nehmen Wünsche an.", 17],
-    ["lost-treasury", "Die Schatzkammer ohne Ausgangsschild", "challenge", "Der Schatz ist echt. Die Beschilderung ist es nicht.", 20],
-    ["boss", "Der Drache mit dem Kleingedruckten", "boss", "Der Endgegner möchte kurz die Bedingungen besprechen.", 24]
-  ] as const;
-  return rows.map(([id, name, kind, flavor, difficulty], index) => ({
-    id, name, kind, flavor, difficulty: difficulty + scale, health: difficulty + scale,
-    maxHealth: difficulty + scale, cleared: false, ...(index === 0 ? { resolution: "" } : {})
-  }));
+function createEncounters(playerCount: number, language: "de" | "en", initialSeed: number): DungeonEncounter[] {
+  let seed = initialSeed;
+  const random = (length: number) => { seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0; return (seed >>> 8) % length; };
+  const shuffle = <T,>(values: T[]): T[] => {
+    const result = [...values];
+    for (let index = result.length - 1; index > 0; index--) { const next = random(index + 1); [result[index], result[next]] = [result[next]!, result[index]!]; }
+    return result;
+  };
+  const scale = Math.max(0, playerCount - 3) * 5;
+  const early = shuffle(roomPools.early);
+  const middle = shuffle(roomPools.middle);
+  const late = shuffle(roomPools.late);
+  const rules = shuffle(roomRules(language));
+  const room = (template: (typeof early)[number], index: number) => ({ ...localizedRoom(template, language, scale), rule: rules[index % rules.length] });
+  const branch = (id: string): DungeonEncounter => ({ id, name: language === "en" ? "Fork in the dungeon" : "Weggabelung im Dungeon", flavor: "", kind: "event", difficulty: 0, health: 0, maxHealth: 0, cleared: false });
+  return [room(early[0]!, 0), room(early[1]!, 1), branch("first-route"), room(middle[0]!, 2), branch("second-route"), room(middle[1]!, 3), room(late[0]!, 4), {
+    id: "boss", artKey: "boss", name: language === "en" ? "The dragon with the small print" : "Der Drache mit dem Kleingedruckten",
+    flavor: language === "en" ? "The final boss would like to discuss the terms." : "Der Endgegner möchte kurz die Bedingungen besprechen.", kind: "boss", difficulty: 24 + scale, health: 3, maxHealth: 3, cleared: false
+  }];
 }
 
-function routeOptions(playerCount: number, encounterIndex: number): NonNullable<DungeonPartyState["routeOptions"]> {
-  const scale = Math.max(0, playerCount - 3) * 2;
-  const alternatives = encounterIndex === 2
-    ? [
-      ["merchant", "Händler mit den sieben Preisen", "Bei Erfolg erhält jede Person 1 Gold. Der Händler nennt es Mengenrabatt.", "event", 14],
-      ["crypt", "Gruft der klappernden Ahnen", "Bei Erfolg erhält der stärkste Beitrag 2 zusätzlichen Ruhm.", "battle", 16]
-    ] as const
-    : [
-      ["shrine", "Schrein der zweiten Chancen", "Bei Erfolg heilt der Schrein alle um 1 Leben.", "challenge", 16],
-      ["cursed-armory", "Waffenkammer mit Eigenleben", "Bei Erfolg ziehen alle, die Beute sichern, eine zusätzliche Karte.", "battle", 19]
-    ] as const;
-  return alternatives.map(([id, name, description, kind, difficulty]) => ({
-    id, name, description, kind, difficulty: difficulty + scale,
-    health: difficulty + scale, maxHealth: difficulty + scale, cleared: false as const
-  }));
+function routeOptions(state: DungeonPartyState, encounterIndex: number): NonNullable<DungeonPartyState["routeOptions"]> {
+  const scale = Math.max(0, state.heroes.length - 3) * 5;
+  const pool = [...routePools[encounterIndex === 2 ? 0 : 1]!];
+  let seed = state.seed;
+  for (let index = pool.length - 1; index > 0; index--) {
+    seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+    const selected = (seed >>> 8) % (index + 1);
+    [pool[index], pool[selected]] = [pool[selected]!, pool[index]!];
+  }
+  return pool.slice(0, 2).map((room) => {
+    const localized = localizedRoom(room, state.language, scale);
+    return { ...localized, artKey: room.artKey, description: localized.flavor, cleared: false as const };
+  });
 }
 
 function pickClass(selectedId: string | null | undefined): string {
@@ -61,11 +49,13 @@ function pickClass(selectedId: string | null | undefined): string {
 }
 
 function startPlanning(state: DungeonPartyState, now: number, encounterIndex: number, routeResolved = false): DungeonPartyState {
+  if ([3, 7].includes(encounterIndex) && !state.completedCamps.includes(encounterIndex)) {
+    return { ...state, stage: "camp", encounterIndex, campChoicesByPlayer: {}, campResults: [], continueByPlayerId: {}, completedCamps: [...state.completedCamps, encounterIndex], lastResolution: undefined, lastRolls: undefined, message: state.language === "en" ? "Prepare at the campfire." : "Bereitet euch am Lagerfeuer vor.", updatedAt: now };
+  }
   if (!routeResolved && [2, 4].includes(encounterIndex)) {
-    const playerCount = state.heroes.length;
     return {
       ...state, stage: "voting", encounterIndex, actionsByPlayer: {}, routeVotesByPlayer: {},
-      responsesByPlayerId: {}, continueByPlayerId: {}, routeOptions: routeOptions(playerCount, encounterIndex),
+      responsesByPlayerId: {}, continueByPlayerId: {}, routeOptions: routeOptions(state, encounterIndex),
       lastRolls: undefined, lastResolution: undefined, updatedAt: now,
       message: "Wählt gemeinsam den nächsten Weg."
     };
@@ -87,7 +77,7 @@ function startPlanning(state: DungeonPartyState, now: number, encounterIndex: nu
       partyPower: undefined, resolution: undefined
     }
     : encounter);
-  return { ...state, stage: "planning", encounterIndex, encounters, actionsByPlayer: {}, responsesByPlayerId: {}, routeVotesByPlayer: {}, continueByPlayerId: {}, routeOptions: undefined, lastRolls: undefined, lastResolution: undefined, updatedAt: now };
+  return { ...state, stage: "planning", encounterIndex, encounters, actionsByPlayer: {}, responsesByPlayerId: {}, routeVotesByPlayer: {}, continueByPlayerId: {}, routeOptions: undefined, lastRolls: undefined, lastResolution: undefined, message: state.language === "en" ? "Choose your actions." : "Wählt eure Aktionen.", updatedAt: now };
 }
 
 function resolveRouteVote(state: DungeonPartyState, now: number): DungeonPartyState {
@@ -123,8 +113,9 @@ function hasPlayableResponse(state: DungeonPartyState, playerId: string): boolea
   });
 }
 
-function grantLootCard(hero: DungeonPartyState["heroes"][number], hands: Record<string, DungeonCard[]>, seed: number, encounterIndex: number, drawIndex: number): DungeonCard {
-  const cardTemplate = cardCatalog[(seed + encounterIndex + drawIndex) % cardCatalog.length]!;
+function grantLootCard(hero: DungeonPartyState["heroes"][number], hands: Record<string, DungeonCard[]>, seed: number, encounterIndex: number, drawIndex: number, language: "de" | "en"): DungeonCard {
+  const catalog = cardCatalog(language);
+  const cardTemplate = catalog[((seed >>> 8) + encounterIndex + drawIndex) % catalog.length]!;
   const card = { ...cardTemplate, id: `${cardTemplate.id}-${hero.playerId}-${encounterIndex}-${seed}-${drawIndex}` };
   if (card.kind === "equipment") {
     if (!hero.items.some((item) => item.id === card.id)) hero.items.push({ id: card.id, name: card.name, description: card.description, attack: card.attack });
@@ -136,7 +127,7 @@ function grantLootCard(hero: DungeonPartyState["heroes"][number], hands: Record<
 
 function playerPower(heroClass: string, action: DungeonActionId, roll: number, itemPower: number): number {
   if (action === "mage_burst") return 9 + roll + itemPower;
-  if (action === "rogue_lift") return 1 + itemPower;
+  if (action === "rogue_lift") return 2 + itemPower;
   if (action === "cleric_heal") return 2 + (heroClass === "cleric" ? 2 : 0) + Math.floor(roll / 4);
   if (action === "bard_inspire") return 2 + roll + itemPower + 1;
   if (action === "tinkerer_improvise") return 2 + roll + itemPower + 2 + (roll >= 4 ? 3 : 0);
@@ -145,34 +136,58 @@ function playerPower(heroClass: string, action: DungeonActionId, roll: number, i
   return 2 + roll + itemPower + ({ warrior: 2, mage: 3, rogue: 1, cleric: 1, bard: 1, tinkerer: 2 }[heroClass] ?? 0);
 }
 
-function grantBossReward(hero: DungeonPartyState["heroes"][number], hands: Record<string, DungeonCard[]>, seed: number, encounterIndex: number, phaseIndex: number): DungeonCard {
-  const effectCards = cardCatalog.filter((card) => card.kind === "effect");
-  const template = effectCards[(seed + encounterIndex + phaseIndex + hero.playerId.length) % effectCards.length]!;
-  const card = { ...template, id: `${template.id}-${hero.playerId}-boss-${encounterIndex}-${seed}` };
+function grantBossReward(hero: DungeonPartyState["heroes"][number], hands: Record<string, DungeonCard[]>, seed: number, encounterIndex: number, phaseIndex: number, language: "de" | "en"): DungeonCard {
+  const effectCards = cardCatalog(language).filter((card) => card.kind === "effect");
+  const template = effectCards[((seed >>> 8) + encounterIndex + phaseIndex) % effectCards.length]!;
+  const card = { ...template, id: `${template.id}-${hero.playerId}-${encounterIndex}-${phaseIndex}-${seed}` };
   hands[hero.playerId] = [...(hands[hero.playerId] ?? []), card];
   return card;
 }
 
+function resolveCamp(state: DungeonPartyState, now: number): DungeonPartyState {
+  const heroes = state.heroes.map((hero) => ({ ...hero, items: [...hero.items] }));
+  const handsByPlayerId = Object.fromEntries(Object.entries(state.handsByPlayerId).map(([id, hand]) => [id, [...hand]]));
+  let preparedPower = state.preparedPower;
+  const campResults: DungeonCampResult[] = heroes.map((hero, index) => {
+    const action = state.campChoicesByPlayer[hero.playerId]!;
+    const before = hero.health;
+    const cost = campActions[action].cost;
+    hero.gold -= cost;
+    const cards: DungeonCard[] = [];
+    if (action === "rest") hero.health = Math.min(maxHealth, hero.health + 3);
+    if (action === "scout") preparedPower += 2;
+    if (action === "upgrade") hero.items.push({ id: `camp-upgrade-${state.encounterIndex}-${hero.playerId}`, name: state.language === "en" ? "Camp upgrade" : "Lager-Aufrüstung", description: "+1", attack: 1 });
+    if (action === "stock") {
+      for (let draw = 0; draw < 2; draw++) cards.push(grantBossReward(hero, handsByPlayerId, state.seed + index * 7919, state.encounterIndex, draw, state.language));
+    }
+    return { playerId: hero.playerId, playerName: hero.name, action, healthDelta: hero.health - before, goldDelta: -cost, powerDelta: action === "upgrade" ? 1 : action === "scout" ? 2 : 0, cards };
+  });
+  return { ...state, stage: "camp_reveal", heroes, handsByPlayerId, preparedPower, campResults, continueByPlayerId: {}, message: state.language === "en" ? "Everyone has prepared. Continue when ready." : "Alle sind vorbereitet. Weiter, wenn ihr bereit seid.", updatedAt: now };
+}
+
 function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartyState {
   let seed = (state.seed >>> 0) || 17;
-  const rollD6 = () => { seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0; return 1 + (seed % 6); };
+  const rollD6 = () => { seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0; return 1 + ((seed >>> 16) % 6); };
   const beforeByPlayer = new Map(state.heroes.map((hero) => [hero.playerId, { health: hero.health, fame: hero.fame, gold: hero.gold }]));
-  const heroes: DungeonPartyState["heroes"] = state.heroes.map((hero) => ({ ...hero, lastAction: state.actionsByPlayer[hero.playerId]?.action, lastFameDelta: 0, lastOutcome: undefined }));
+  const heroes: DungeonPartyState["heroes"] = state.heroes.map((hero) => ({ ...hero, items: [...hero.items], lastAction: state.actionsByPlayer[hero.playerId]?.action, lastFameDelta: 0, lastOutcome: undefined }));
   const handsByPlayerId = Object.fromEntries(Object.entries(state.handsByPlayerId).map(([playerId, hand]) => [playerId, [...hand]]));
   const current = state.encounters[state.encounterIndex];
   if (!current) return state;
-  let partyPower = 0;
+  let partyPower = state.preparedPower;
   let difficultyModifier = 0;
   const rolls: NonNullable<DungeonPartyState["lastRolls"]> = [];
   const playedCards: Array<{ hero: DungeonPartyState["heroes"][number]; card: DungeonCard; targetPlayerId?: string }> = [];
-  const gainedCards: Array<{ hero: DungeonPartyState["heroes"][number]; card: DungeonCard; source: "loot" | "boss" }> = [];
+  const gainedCards: Array<{ hero: DungeonPartyState["heroes"][number]; card: DungeonCard; source: "loot" | "boss" | "room" }> = [];
   const protectedPlayerIds = new Set<string>();
   const sabotagePlayers: Array<{ hero: DungeonPartyState["heroes"][number]; card: DungeonCard }> = [];
 
   for (const hero of heroes) {
     const choice = state.actionsByPlayer[hero.playerId] ?? { action: "fight" as const };
     const roll = rollD6();
-    const contribution = playerPower(hero.classId, choice.action, roll, hero.items.reduce((sum, item) => sum + item.attack, 0));
+    const ruleBonus = current.rule?.id === "frontline" && ["fight", "warrior_guard"].includes(choice.action) ? 2
+      : current.rule?.id === "echo" && ["aid", "cleric_heal"].includes(choice.action) ? 3
+        : current.rule?.id === "arcane" && !["fight", "aid", "loot"].includes(choice.action) ? 2 : 0;
+    const contribution = playerPower(hero.classId, choice.action, roll, hero.items.reduce((sum, item) => sum + item.attack, 0)) + ruleBonus + (choice.action === "bard_inspire" ? 2 : 0);
     partyPower += contribution;
     rolls.push({ playerId: hero.playerId, roll, contribution });
     const response = state.responsesByPlayerId[hero.playerId];
@@ -188,17 +203,12 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
       hero.fame += 1;
       hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 1;
     }
-    if (hero.classId === "mage" && (choice.action === "fight" || choice.action === "mage_burst") && roll === 1) {
-      hero.health = Math.max(0, hero.health - 1);
-      hero.lastOutcome = "Der Zauber-Rückschlag kostet dich 1 Leben.";
-    }
     if (hero.classId === "bard" && choice.action === "aid") {
       hero.fame += 1;
       hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 1;
     }
     if (choice.action === "warrior_guard") protectedPlayerIds.add(hero.playerId);
     if (choice.action === "bard_inspire") {
-      partyPower += 2;
       hero.lastOutcome = "Dein Kampflied gibt der Gruppe +2 Kampfkraft.";
     }
   }
@@ -211,9 +221,9 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
           const stolenFame = Math.min(1, Math.max(0, target.fame));
           target.fame -= stolenFame;
           target.lastFameDelta = (target.lastFameDelta ?? 0) - stolenFame;
-          hero.fame += 1;
-          hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 1;
-          hero.lastOutcome = `Intrige: ${target.name} verliert ${stolenFame} Ruhm; du erhältst 1 Ruhm.`;
+          hero.fame += stolenFame;
+          hero.lastFameDelta = (hero.lastFameDelta ?? 0) + stolenFame;
+          hero.lastOutcome = `Intrige: ${target.name} verliert ${stolenFame} Ruhm; du erhältst ${stolenFame} Ruhm.`;
           partyPower -= 2;
           sabotagePlayers.push({ hero, card });
         }
@@ -255,15 +265,43 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
         hero.lastOutcome = "Du hast dem Gegner Verstärkung verschafft.";
         sabotagePlayers.push({ hero, card });
         break;
+      case "heal":
+        if (target) target.health = Math.min(maxHealth, target.health + 2);
+        break;
+      case "weaken": difficultyModifier -= 4; break;
+      case "barrier":
+        for (const protectedHero of heroes) protectedPlayerIds.add(protectedHero.playerId);
+        break;
+      case "fortune": {
+        const targetRoll = rolls.find((entry) => entry.playerId === targetPlayerId);
+        if (target && targetRoll && targetRoll.roll <= 3) {
+          targetRoll.originalRoll ??= targetRoll.roll;
+          const newRoll = Math.max(targetRoll.roll, rollD6());
+          const action = state.actionsByPlayer[target.playerId]!.action;
+          const items = target.items.reduce((sum, item) => sum + item.attack, 0);
+          const difference = playerPower(target.classId, action, newRoll, items) - playerPower(target.classId, action, targetRoll.roll, items);
+          targetRoll.roll = newRoll;
+          targetRoll.contribution += difference;
+          partyPower += difference;
+        }
+        break;
+      }
     }
   }
 
-  const winner = heroes.filter((hero) => hero.classId === "cleric" && (state.actionsByPlayer[hero.playerId]?.action === "aid" || state.actionsByPlayer[hero.playerId]?.action === "cleric_heal")).sort((a, b) => a.health - b.health)[0];
-  if (winner && heroes.some((hero) => hero.health < maxHealth)) {
-    const hurt = heroes.filter((hero) => hero.health < maxHealth).sort((a, b) => a.health - b.health)[0];
-    if (hurt) hurt.health = Math.min(maxHealth, hurt.health + 1);
+  for (const hero of heroes) {
+    const action = state.actionsByPlayer[hero.playerId]?.action;
+    if (hero.classId === "mage" && (action === "fight" || action === "mage_burst") && rolls.find((roll) => roll.playerId === hero.playerId)?.roll === 1) {
+      const damage = action === "mage_burst" ? 2 : 1;
+      hero.health = Math.max(0, hero.health - damage);
+      hero.lastOutcome = `Der Zauber-Rückschlag kostet dich ${damage} Leben.`;
+    }
   }
-  const targetDifficulty = current.difficulty + difficultyModifier;
+  for (const healer of heroes.filter((hero) => hero.classId === "cleric" && ["aid", "cleric_heal"].includes(state.actionsByPlayer[hero.playerId]?.action ?? ""))) {
+    const hurt = heroes.filter((hero) => hero.health < maxHealth).sort((a, b) => a.health - b.health)[0];
+    if (hurt) hurt.health = Math.min(maxHealth, hurt.health + (state.actionsByPlayer[healer.playerId]?.action === "cleric_heal" ? 2 : 1));
+  }
+  const targetDifficulty = Math.max(1, current.difficulty + difficultyModifier);
   const success = partyPower >= targetDifficulty;
   const isBoss = current.id === "boss";
   const bossPhaseIndex = state.bossPhaseIndex;
@@ -293,24 +331,25 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     if (success && action === "rogue_lift") {
       const target = [...heroes].filter((entry) => entry.playerId !== hero.playerId && entry.gold > 0).sort((a, b) => b.gold - a.gold)[0];
       if (target) {
-        const stolen = Math.min(2, target.gold);
+        const stolen = Math.min(3, target.gold);
         target.gold -= stolen;
         hero.gold += stolen;
+        hero.fame += 1;
         hero.lastOutcome = `${target.name} verliert ${stolen} Gold durch dein Taschenspiel.`;
       } else hero.lastOutcome = "Niemand hatte Gold, das du stehlen konntest.";
     }
     if (success && action === "loot") {
-      const firstCard = grantLootCard(hero, handsByPlayerId, seed + heroes.indexOf(hero), state.encounterIndex, 0);
+      const firstCard = grantLootCard(hero, handsByPlayerId, seed + heroes.indexOf(hero) * 7919, state.encounterIndex, 0, state.language);
       gainedCards.push({ hero, card: firstCard, source: "loot" });
       hero.fame += 2;
       hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 2;
-      const extraCard = current.id === "cursed-armory" ? grantLootCard(hero, handsByPlayerId, seed + heroes.indexOf(hero), state.encounterIndex, 1) : undefined;
+      const extraCard = current.id === "cursed-armory" ? grantLootCard(hero, handsByPlayerId, seed + heroes.indexOf(hero) * 7919, state.encounterIndex, 1, state.language) : undefined;
       if (extraCard) gainedCards.push({ hero, card: extraCard, source: "loot" });
       const rewards = [firstCard, extraCard].filter((card): card is DungeonCard => Boolean(card)).map((card) => card.kind === "equipment" ? `Ausrüstung: ${card.name}.` : `Karte gezogen: ${card.name}.`).join(" ");
       hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${rewards}`;
     }
     if (!success) {
-      const baseDamage = action === "aid" || action === "fight" ? 1 : 2;
+      const baseDamage = (action === "loot" || action === "rogue_lift" ? 2 : 1) + (current.rule?.id === "danger" ? 1 : 0);
       const damage = Math.max(0, baseDamage - (protectedPlayerIds.has(hero.playerId) ? 1 : 0));
       hero.health = Math.max(0, hero.health - damage);
       hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}${damage < baseDamage ? "Dein Schutz fängt 1 Schaden ab. " : ""}Dungeon-Schaden: ${damage}.`;
@@ -318,9 +357,23 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
     if (playedCards.some((entry) => entry.targetPlayerId === hero.playerId)) hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}Du warst Ziel einer Aktionskarte.`;
   }
 
+  if (success && current.rule?.id === "riches") {
+    for (const hero of heroes) if (state.actionsByPlayer[hero.playerId]?.action === "loot") hero.gold += 2;
+  }
+  if (success && current.rule?.id === "danger") for (const hero of heroes) hero.fame += 1;
+
+  // Successful rooms replenish low hands; looting still grants its extra card/equipment.
+  if (success && !isBoss) {
+    for (const [index, hero] of heroes.entries()) {
+      if ((handsByPlayerId[hero.playerId]?.length ?? 0) < 3) {
+        gainedCards.push({ hero, card: grantBossReward(hero, handsByPlayerId, seed + index * 7919, state.encounterIndex, 0, state.language), source: "room" });
+      }
+    }
+  }
+
   if (isBoss && success) {
     for (const hero of heroes) {
-      const card = grantBossReward(hero, handsByPlayerId, seed + heroes.indexOf(hero), state.encounterIndex, bossPhaseIndex);
+      const card = grantBossReward(hero, handsByPlayerId, seed + heroes.indexOf(hero) * 7919, state.encounterIndex, bossPhaseIndex, state.language);
       gainedCards.push({ hero, card, source: "boss" });
       hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}Drachenbeute: ${card.name} kommt auf deine Hand.`;
     }
@@ -337,18 +390,27 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
   if (success && current.id === "merchant") {
     for (const hero of heroes) { hero.gold += 1; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}Händlerbonus: +1 Gold.`; }
   } else if (success && current.id === "crypt") {
-    const topContribution = [...rolls].sort((a, b) => b.contribution - a.contribution)[0];
-    const hero = heroes.find((candidate) => candidate.playerId === topContribution?.playerId);
-    if (hero) { hero.fame += 2; hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 2; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}Gruftbonus: +2 Ruhm für den stärksten Beitrag.`; }
-  } else if (success && current.id === "shrine") {
+    const topPower = Math.max(...rolls.map((roll) => roll.contribution));
+    for (const hero of heroes.filter((hero) => rolls.some((roll) => roll.playerId === hero.playerId && roll.contribution === topPower))) {
+      hero.fame += 2; hero.lastFameDelta = (hero.lastFameDelta ?? 0) + 2; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}Gruftbonus: +2 Ruhm für den stärksten Beitrag.`;
+    }
+  } else if (success && ["shrine", "well"].includes(current.id)) {
     for (const hero of heroes) {
       if (hero.health < maxHealth) { hero.health += 1; hero.lastOutcome = `${hero.lastOutcome ? `${hero.lastOutcome} ` : ""}Der Schrein heilt 1 Leben.`; }
     }
+  } else if (success && current.id === "library") {
+    for (const hero of heroes) if (["aid", "cleric_heal"].includes(state.actionsByPlayer[hero.playerId]?.action ?? "")) hero.fame += 2;
+  } else if (success && current.id === "forge") {
+    for (const hero of heroes) hero.items.push({ id: `forge-${hero.playerId}`, name: state.language === "en" ? "Forge upgrade" : "Schmiede-Aufrüstung", description: "+1", attack: 1 });
+  } else if (success && current.id === "arena") {
+    for (const hero of heroes) hero.fame += 2;
   }
 
   if (success) {
-    const top = [...heroes].sort((a, b) => (b.lastFameDelta ?? 0) - (a.lastFameDelta ?? 0))[0];
-    if (top) { top.fame += 1; top.lastFameDelta = (top.lastFameDelta ?? 0) + 1; top.lastOutcome = `${top.lastOutcome ? `${top.lastOutcome} ` : ""}Du erhältst den Ruhm für den entscheidenden Beitrag.`; }
+    const topPower = Math.max(...rolls.map((roll) => roll.contribution));
+    for (const top of heroes.filter((hero) => rolls.some((roll) => roll.playerId === hero.playerId && roll.contribution === topPower))) {
+      top.fame += 1; top.lastFameDelta = (top.lastFameDelta ?? 0) + 1; top.lastOutcome = `${top.lastOutcome ? `${top.lastOutcome} ` : ""}Stärkster Kraftbeitrag: +1 Ruhm.`;
+    }
   }
   const encounter = nextEncounters[state.encounterIndex]!;
   const partyMorale = Math.max(0, Math.min(5, state.partyMorale + (success ? 1 : -1)));
@@ -365,14 +427,14 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
   const resolution = {
     id: `${state.encounterIndex}-${state.bossPhaseIndex}-${state.bossPhaseAttempts}-${seed}`,
     encounterId: current.id, encounterName: current.name, success, partyPower, targetDifficulty,
-    difficultyModifier,
+    difficultyModifier, sharedPower: partyPower - rolls.reduce((sum, roll) => sum + roll.contribution, 0),
     heroes: finalHeroes.map((hero) => {
       const before = beforeByPlayer.get(hero.playerId)!;
       const roll = rolls.find((entry) => entry.playerId === hero.playerId)!;
       return {
         playerId: hero.playerId, name: hero.name, classId: hero.classId,
         action: state.actionsByPlayer[hero.playerId]?.action ?? "fight",
-        roll: roll.roll, contribution: roll.contribution,
+        roll: roll.roll, originalRoll: roll.originalRoll, contribution: roll.contribution,
         healthDelta: hero.health - before.health, fameDelta: hero.fame - before.fame, goldDelta: hero.gold - before.gold,
         outcome: hero.lastOutcome
       };
@@ -388,7 +450,7 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
   };
   const next: DungeonPartyState = {
     ...state, stage: campaignEnded ? "complete" : "reveal", heroes: finalHeroes, handsByPlayerId, encounters: nextEncounters,
-    actionsByPlayer: {}, continueByPlayerId: {}, partyMorale, seed,
+    actionsByPlayer: {}, continueByPlayerId: {}, partyMorale, seed, preparedPower: 0,
     bossPhaseIndex: nextBossPhaseIndex, bossPhaseAttempts: nextBossPhaseAttempts,
     lastRolls: rolls, lastResolution: resolution, campaignWon: bossPhaseComplete,
     winnerPlayerId: campaignEnded ? finalWinner?.playerId : undefined,
@@ -402,14 +464,19 @@ function resolveEncounter(state: DungeonPartyState, now: number): DungeonPartySt
 export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, DungeonPartyPublicState> = {
   manifest: dungeonPartyManifest,
   createInitialState(context) {
+    const seed = (context.now + context.players.length * 997) >>> 0;
+    const catalog = cardCatalog(context.language).filter((card) => card.kind === "effect");
     return {
       ...createBaseRoundState("round_intro", context.now, { durationMs: roundPhaseDurations.roundIntroMs, message: "Der Dungeon wartet." }),
-      stage: "planning", encounterIndex: 0, encounters: createEncounters(context.players.length),
-      heroes: context.players.map((player) => ({ playerId: player.id, name: player.name, classId: pickClass(player.selectedCharacterId), health: maxHealth, fame: 0, gold: 0, items: [] })),
-      handsByPlayerId: Object.fromEntries(context.players.map((player) => [player.id, [{ ...intrigueCard }]])),
+      stage: "planning", language: context.language, encounterIndex: 0, encounters: createEncounters(context.players.length, context.language, seed),
+      heroes: context.players.map((player) => ({ playerId: player.id, name: player.name, classId: pickClass(player.selectedCharacterId), health: maxHealth, fame: 0, gold: 2, items: [] })),
+      handsByPlayerId: Object.fromEntries(context.players.map((player, index) => {
+        const extras = catalog.filter((card) => !["intrigue", "rally"].includes(card.effect ?? ""));
+        return [player.id, [catalog.find((card) => card.effect === "intrigue")!, catalog.find((card) => card.effect === "rally")!, extras[((seed >>> 8) + index * 3) % extras.length]!].map((card, draw) => ({ ...card, id: `${card.id}-${player.id}-start-${draw}` }))];
+      })),
       actionsByPlayer: {}, responsesByPlayerId: {}, routeVotesByPlayer: {}, continueByPlayerId: {}, routeHistory: [], partyMorale: 3,
       bossPhaseIndex: 0, bossPhaseAttempts: 0,
-      seed: (context.now + context.players.length * 997) >>> 0
+      seed, campChoicesByPlayer: {}, campResults: [], completedCamps: [], preparedPower: 0
     };
   },
   startRound(state, context) {
@@ -419,7 +486,13 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
     });
   },
   handleInput(state, input, context) {
-    if (state.phase !== "playing" || !context.players.some((player) => player.id === input.playerId)) return state;
+    if (state.phase !== "playing" || !context.players.some((player) => player.id === input.playerId) || !state.heroes.some((hero) => hero.playerId === input.playerId)) return state;
+    if (input.type === "dungeon_camp_action") {
+      if (state.stage !== "camp" || state.campChoicesByPlayer[input.playerId] || !Object.hasOwn(campActions, input.action)) return state;
+      const hero = state.heroes.find((entry) => entry.playerId === input.playerId);
+      if (!hero || hero.gold < campActions[input.action].cost) return state;
+      return { ...state, campChoicesByPlayer: { ...state.campChoicesByPlayer, [input.playerId]: input.action }, updatedAt: context.now };
+    }
     if (input.type === "dungeon_route_vote") {
       if (state.stage !== "voting" || state.routeVotesByPlayer[input.playerId] || !state.routeOptions?.some((option) => option.id === input.routeId)) return state;
       return { ...state, routeVotesByPlayer: { ...state.routeVotesByPlayer, [input.playerId]: input.routeId }, updatedAt: context.now };
@@ -429,7 +502,7 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
       if (input.cardId) {
         const card = (state.handsByPlayerId[input.playerId] ?? []).find((entry) => entry.id === input.cardId);
         if (!card || card.kind !== "effect") return state;
-        const needsTarget = ["intrigue", "false_bill", "ward", "jam"].includes(card.effect ?? "");
+        const needsTarget = ["intrigue", "false_bill", "ward", "jam", "heal", "fortune"].includes(card.effect ?? "");
         if (needsTarget && (!input.targetPlayerId || !state.heroes.some((hero) => hero.playerId === input.targetPlayerId))) return state;
         if (["intrigue", "false_bill", "jam"].includes(card.effect ?? "") && input.targetPlayerId === input.playerId) return state;
         return { ...state, responsesByPlayerId: { ...state.responsesByPlayerId, [input.playerId]: { cardId: card.id, targetPlayerId: input.targetPlayerId } }, updatedAt: context.now };
@@ -437,7 +510,7 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
       return { ...state, responsesByPlayerId: { ...state.responsesByPlayerId, [input.playerId]: {} }, updatedAt: context.now };
     }
     if (input.type === "dungeon_continue") {
-      if (state.stage !== "reveal" || state.continueByPlayerId[input.playerId]) return state;
+      if (!["reveal", "camp_reveal"].includes(state.stage) || state.continueByPlayerId[input.playerId]) return state;
       return { ...state, continueByPlayerId: { ...state.continueByPlayerId, [input.playerId]: true }, updatedAt: context.now };
     }
     if (state.stage !== "planning" || input.type !== "dungeon_action" || state.actionsByPlayer[input.playerId]) return state;
@@ -447,6 +520,9 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
     return { ...state, actionsByPlayer: { ...state.actionsByPlayer, [input.playerId]: { action: input.action } }, updatedAt: context.now };
   },
   tick(state, _deltaMs, context) {
+    if (state.phase !== "playing") return state;
+    if (state.stage === "camp" && Object.keys(state.campChoicesByPlayer).length >= state.heroes.length) return resolveCamp(state, context.now);
+    if (state.stage === "camp_reveal" && Object.keys(state.continueByPlayerId).length >= state.heroes.length) return startPlanning(state, context.now, state.encounterIndex);
     if (state.stage === "voting" && Object.keys(state.routeVotesByPlayer).length >= state.heroes.length) {
       return resolveRouteVote(state, context.now);
     }
@@ -467,16 +543,16 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
     return state.heroes.map((hero) => ({ playerId: hero.playerId, delta: hero.fame, reason: "Dungeon-Ruhm" }));
   },
   toPublicState(state) {
-    const { actionsByPlayer: _actions, responsesByPlayerId: _responses, handsByPlayerId: _hands, routeVotesByPlayer: _votes, seed: _seed, ...publicState } = state;
+    const { actionsByPlayer: _actions, responsesByPlayerId: _responses, handsByPlayerId: _hands, routeVotesByPlayer: _votes, campChoicesByPlayer: _camp, seed: _seed, ...publicState } = state;
     const revealed = state.stage === "response"
       ? Object.fromEntries(Object.entries(state.actionsByPlayer).map(([playerId, action]) => [playerId, action.action]))
       : state.stage === "reveal" || state.stage === "complete"
         ? Object.fromEntries((state.lastResolution?.heroes ?? []).map((entry) => [entry.playerId, entry.action]))
       : {};
-    return { ...publicState, heroes: state.heroes.map((hero) => ({ ...hero, handCount: (state.handsByPlayerId[hero.playerId] ?? []).length })), submittedCount: Object.keys(state.actionsByPlayer).length, responseCount: Object.keys(state.responsesByPlayerId).length, routeVoteCount: Object.keys(state.routeVotesByPlayer).length, revealedActionsByPlayer: revealed };
+    return { ...publicState, heroes: state.heroes.map((hero) => ({ ...hero, handCount: (state.handsByPlayerId[hero.playerId] ?? []).length })), submittedCount: Object.keys(state.actionsByPlayer).length, responseCount: Object.keys(state.responsesByPlayerId).length, routeVoteCount: Object.keys(state.routeVotesByPlayer).length, campSubmittedCount: Object.keys(state.campChoicesByPlayer).length, revealedActionsByPlayer: revealed };
   },
   toControllerStateForPlayer(state, _context, playerId) {
-    const { actionsByPlayer: _actions, responsesByPlayerId: _responses, handsByPlayerId: _hands, routeVotesByPlayer: _votes, seed: _seed, ...publicState } = state;
+    const publicState = serverGame.toPublicState!(state, _context);
     const revealed = state.stage === "response"
       ? Object.fromEntries(Object.entries(state.actionsByPlayer).map(([id, action]) => [id, action.action]))
       : state.stage === "reveal" || state.stage === "complete"
@@ -485,6 +561,6 @@ export const serverGame: ServerGame<DungeonPartyState, DungeonPartyInput, Dungeo
     const ownResponse = state.responsesByPlayerId[playerId];
     const ownResponseCard = ownResponse?.cardId ? state.handsByPlayerId[playerId]?.find((card) => card.id === ownResponse.cardId) : undefined;
     const privateHand = state.handsByPlayerId[playerId] ?? [];
-    return { ...publicState, heroes: state.heroes.map((hero) => ({ ...hero, handCount: (state.handsByPlayerId[hero.playerId] ?? []).length })), ownHand: ownResponseCard ? privateHand.filter((card) => card.id !== ownResponseCard.id) : privateHand, ownResponseCard, ownResponseTargetName: state.heroes.find((hero) => hero.playerId === ownResponse?.targetPlayerId)?.name, submittedCount: Object.keys(state.actionsByPlayer).length, responseCount: Object.keys(state.responsesByPlayerId).length, routeVoteCount: Object.keys(state.routeVotesByPlayer).length, revealedActionsByPlayer: revealed, ownActionSubmitted: Boolean(state.actionsByPlayer[playerId]), ownResponseSubmitted: Boolean(state.responsesByPlayerId[playerId]), ownHasPlayableResponse: hasPlayableResponse(state, playerId), ownVoteSubmitted: Boolean(state.routeVotesByPlayer[playerId]), ownContinueSubmitted: Boolean(state.continueByPlayerId[playerId]), availableTargets: state.heroes.filter((hero) => hero.playerId !== playerId).map(({ playerId: id, name }) => ({ playerId: id, name })) } satisfies DungeonPartyControllerState;
+    return { ...publicState, ownCampSubmitted: Boolean(state.campChoicesByPlayer[playerId]), ownHand: ownResponseCard ? privateHand.filter((card) => card.id !== ownResponseCard.id) : privateHand, ownResponseCard, ownResponseTargetName: state.heroes.find((hero) => hero.playerId === ownResponse?.targetPlayerId)?.name, revealedActionsByPlayer: revealed, ownActionSubmitted: Boolean(state.actionsByPlayer[playerId]), ownResponseSubmitted: Boolean(state.responsesByPlayerId[playerId]), ownHasPlayableResponse: hasPlayableResponse(state, playerId), ownVoteSubmitted: Boolean(state.routeVotesByPlayer[playerId]), ownContinueSubmitted: Boolean(state.continueByPlayerId[playerId]), availableTargets: state.heroes.filter((hero) => hero.playerId !== playerId).map(({ playerId: id, name }) => ({ playerId: id, name })) } satisfies DungeonPartyControllerState;
   }
 };

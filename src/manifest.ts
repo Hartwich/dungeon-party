@@ -1,3 +1,4 @@
+import { catalogText } from "./catalogText.js";
 import type { GameManifest } from "@open-party-lab/game-core";
 import type { DungeonActionId } from "./protocol.js";
 
@@ -12,6 +13,7 @@ export const classActions: Record<string, { id: DungeonActionId; name: { de: str
 
 export const dungeonPartyManifest = {
   id: "dungeon-party",
+  translations: catalogText,
   displayName: "Dungeon Party",
   description: "Besiegt den Dungeon gemeinsam. Sammelt Ruhm, Beute und spielt um den Sieg.",
   minPlayers: 3,
